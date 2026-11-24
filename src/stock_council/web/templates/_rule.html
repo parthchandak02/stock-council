@@ -1,10 +1,18 @@
+{% set is_m = v is string and v.startswith('@') %}
 <div class="rule">
   <select name="m" aria-label="Measure">
-    {% for g in ['Price & volume', 'Size & value', 'Quality', 'Growth', 'Cash'] %}<optgroup label="{{ g }}">
+    {% for g in ['Price & volume', 'Size & value', 'Quality', 'Growth', 'Cash', 'Owners'] %}<optgroup label="{{ g }}">
       {% for key, m in metrics.items() if m[1] == g %}<option value="{{ key }}" {{ 'selected' if key == k }}>{{ m[0] }}{{ ' (' ~ m[2] ~ ')' if m[2] }}</option>{% endfor %}
     </optgroup>{% endfor %}
   </select>
   <select name="o" aria-label="Above or below" class="op"><option value=">" {{ 'selected' if o == '>' }}>above</option><option value="<" {{ 'selected' if o == '<' }}>below</option></select>
-  <input name="v" type="number" step="any" inputmode="decimal" value="{{ '%g'|format(v) if v != '' else '' }}" required aria-label="Value">
+  <span class="val">
+    <input class="num {{ 'hide' if is_m }}" type="number" step="any" inputmode="decimal" value="{{ '' if is_m or v == '' else '%g'|format(v) }}" aria-label="Value">
+    <select class="vs {{ 'on' if is_m }}" aria-label="Compare with">
+      <option value="">a number</option>
+      {% for key, m in metrics.items() %}<option value="@{{ key }}" {{ 'selected' if is_m and v == '@' ~ key }}>{{ m[0] }}</option>{% endfor %}
+    </select>
+    <input type="hidden" name="v" value="{{ v }}">
+  </span>
   <button type="button" class="rm" aria-label="Remove rule">{{ icon('x', 16) }}</button>
 </div>

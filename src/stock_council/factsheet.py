@@ -22,10 +22,15 @@ def _isin_for(conn, symbol: str) -> str:
 
 
 def technicals(conn, isin: str) -> dict:
+    from .actions import aliases
+    ids = aliases(conn, isin)  # one history across an ISIN change (splits)
     df = pd.read_sql_query(
         "SELECT date, SUM(volume) vol, SUM(deliv_qty) deliv, "
         "MAX(CASE WHEN exch='NSE' THEN close END) nse_close, MAX(CASE WHEN exch='BSE' THEN close END) bse_close "
-        "FROM daily WHERE isin=? GROUP BY date ORDER BY date", conn, params=(isin,))
+        f"FROM daily WHERE isin IN ({','.join('?' * len(ids))}) GROUP BY date ORDER BY date", conn, params=ids)
+    from .actions import adjust
+    df["isin"] = isin
+    df = adjust(df, conn, price_cols=("nse_close", "bse_close"), volume_cols=("vol", "deliv"))
     df["close"] = df["nse_close"].fillna(df["bse_close"])
     c, v = df["close"], df["vol"]
     last = c.iloc[-1]
@@ -83,6 +88,11 @@ def build(symbol: str, nse: NSE | None = None) -> dict:
         full = next((q.get("company") for q in disc.get("shareholding") or [] if q.get("company")), None)
         if full:
             sheet["name"] = full  # exchange files cut names short; the filing has the full name
+        try:
+            from .filings import for_symbol
+            sheet["announcements"] = for_symbol(conn, ident["nse_symbol"])
+        except Exception:
+            sheet["announcements"] = []
     return sheet
 
 
@@ -147,6 +157,9 @@ def render_markdown(s: dict) -> str:
           f"- ROE {_fmt(f.get('roe_pct'), '%')} (last FY; 3-yr avg {_fmt(f.get('roe_3y_avg_pct'), '%')}), "
           f"ROCE {_fmt(f.get('roce_pct'), '%')}, ROA {_fmt(f.get('roa_pct'), '%')}, asset turnover {_fmt(f.get('asset_turnover'))}×",
           f"- TTM sales ₹{_fmt(f.get('ttm_sales'))} Cr, TTM net profit ₹{_fmt(f.get('ttm_net_profit'))} Cr"]
+    if s.get("announcements"):
+        L += ["", "## 7. Official announcements to NSE (last 30 days)"]
+        L += [f"- {a['at'][:10]} {a['subject']}: {a['text'][:300]}" for a in s["announcements"]]
     return "\n".join(_spaced(L))
 
 

@@ -89,3 +89,12 @@
     <div><dt>Profit (12 months)</dt><dd>₹{{ n(f.ttm_net_profit) }} Cr</dd></div>
   </dl>
 </section>
+
+{% if s.announcements %}
+<section class="fs">
+  <h3>Announcements to NSE <span class="muted small">last 30 days</span></h3>
+  <ul class="anns">{% for a in s.announcements %}
+    <li><span class="muted small">{{ a.at|day }}</span><b>{{ a.subject }}</b><span>{{ a.text[:220] }}</span>{% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">Filing</a>{% endif %}</li>
+  {% endfor %}</ul>
+</section>
+{% endif %}

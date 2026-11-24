@@ -61,6 +61,8 @@ def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = Fal
     dep = _row(inc, "Reconciled Depreciation", "Depreciation And Amortization In Income Statement")
     ebit = _row(inc, "EBIT", "Operating Income")
     cogs = _row(inc, "Cost Of Revenue")
+    ebitda = _row(inc, "EBITDA", "Normalized EBITDA")
+    interest = _row(inc, "Interest Expense", "Interest Expense Non Operating")
     eq = _row(bs, "Stockholders Equity", "Common Stock Equity")
     debt = _row(bs, "Total Debt")
     assets = _row(bs, "Total Assets")
@@ -136,13 +138,24 @@ def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = Fal
 
     pe = _div(mcap, ttm_pat) if ttm_pat and ttm_pat > 0 else None
     profit_cagr_3y = _cagr(at(pat, 0), at(pat, 3), 3)
-    sector = industry = None
+    sector = industry = div_yield = ev_ebitda = None
     if with_sector:
         try:
             info = t.get_info()
             sector, industry = info.get("sector"), info.get("industry")
+            dy = info.get("trailingAnnualDividendYield")
+            div_yield = round(dy * 100, 2) if isinstance(dy, (int, float)) else None
+            ev = info.get("enterpriseToEbitda")
+            ev_ebitda = round(ev, 1) if isinstance(ev, (int, float)) else None
         except Exception:
             pass
+    qs5 = [q["sales"] for q in quarters] if quarters else []
+    qp5 = [q["net_profit"] for q in quarters] if quarters else []
+
+    def yoy(xs):
+        if len(xs) >= 5 and xs[0] is not None and xs[4] not in (None, 0) and xs[4] > 0:
+            return round((xs[0] / xs[4] - 1) * 100, 1)
+        return None
     return {
         "yahoo_symbol": yahoo_symbol, "sector": sector, "industry": industry,
         "price": _r(price), "shares_cr": _r(shares / CR) if shares else None,
@@ -160,6 +173,11 @@ def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = Fal
         "sales_cagr_3y_pct": _cagr(at(rev, 0), at(rev, 3), 3),
         "profit_cagr_3y_pct": profit_cagr_3y,
         "peg": round(pe / profit_cagr_3y, 2) if pe and profit_cagr_3y and profit_cagr_3y > 0 else None,
+        "opm_pct": _div(at(ebitda, 0), at(rev, 0), 100),
+        "npm_pct": _div(at(pat, 0), at(rev, 0), 100),
+        "interest_cover": _div(at(ebit, 0), abs(at(interest, 0))) if at(interest, 0) else None,
+        "q_sales_yoy_pct": yoy(qs5), "q_profit_yoy_pct": yoy(qp5),
+        "div_yield_pct": div_yield, "ev_ebitda": ev_ebitda,
         "annual": annual,
         "quarters": quarters,
     }

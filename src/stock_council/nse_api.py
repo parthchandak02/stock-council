@@ -41,14 +41,15 @@ class NSE:
             self.s.get(BASE + "/", timeout=30)  # refresh cookies
         raise RuntimeError(f"NSE API {path} -> HTTP {r.status_code}")
 
-    def shareholding(self, symbol: str, quarters: int = 5) -> list[dict]:
-        """Latest `quarters` filings, newest first, each with promoter/FII/DII/... in percent."""
+    def shareholding(self, symbol: str, quarters: int = 5, xbrl_for: set[int] | None = None) -> list[dict]:
+        """Latest `quarters` filings, newest first, each with promoter/FII/DII/... in percent.
+        xbrl_for: which of them (0 = newest) to read the fund split for; default all."""
         rows = self._get_json(f"corporate-share-holdings-master?index=equities&symbol={symbol}")
         out = []
-        for row in rows[:quarters]:
+        for n, row in enumerate(rows[:quarters]):
             q = {"quarter": row.get("date"), "company": row.get("name"), "promoter": _f(row.get("pr_and_prgrp")),
                  "public": _f(row.get("public_val"))}
-            if row.get("xbrl"):
+            if row.get("xbrl") and (xbrl_for is None or n in xbrl_for):
                 time.sleep(1)
                 try:
                     q.update(self._holders_from_xbrl(row["xbrl"]))

@@ -45,9 +45,14 @@ def key_numbers(sheet: dict) -> list[dict]:
     pl = sheet.get("pledge") or {}
     out = []
 
+    lender = f.get("lender")
+    NA = "Lender: deposits and loans are its raw material"
     conv = a0.get("cfo_to_profit_plus_dep_pct")
-    out.append({"group": "Cash", "label": "Profit turning into cash", "value": _pct(conv, 0),
-                "tone": _tone(conv, 80, 50), "hint": f"Operating cash ÷ (profit + depreciation) · FY{(a0.get('fy_end') or '')[2:4]}"})
+    if lender:
+        out.append({"group": "Cash", "label": "Profit turning into cash", "value": "Not used", "tone": "na", "hint": NA})
+    else:
+        out.append({"group": "Cash", "label": "Profit turning into cash", "value": _pct(conv, 0),
+                    "tone": _tone(conv, 80, 50), "hint": f"Operating cash ÷ (profit + depreciation) · FY{(a0.get('fy_end') or '')[2:4]}"})
     fcf = a0.get("free_cash_flow")
     neg_years = sum(1 for a in annual[:3] if (a.get("free_cash_flow") or 0) < 0)
     out.append({"group": "Cash", "label": "Free cash flow", "value": "-" if fcf is None else f"₹{fcf:,.0f} Cr",
@@ -57,16 +62,20 @@ def key_numbers(sheet: dict) -> list[dict]:
     de = f.get("debt_to_equity")
     old_de = annual[2].get("debt_to_equity") if len(annual) > 2 else None
     trend = "" if de is None or old_de is None else (" · falling" if de < old_de - 0.05 else " · rising" if de > old_de + 0.05 else " · steady")
-    out.append({"group": "Debt", "label": "Debt / equity", "value": _x(de) + trend, "tone": _tone(de, 0.5, 1.0, False),
-                "hint": f"vs {_x(old_de)} two years earlier"})
+    if lender:
+        out.append({"group": "Debt", "label": "Debt / equity", "value": "Not used", "tone": "na", "hint": NA})
+    else:
+        out.append({"group": "Debt", "label": "Debt / equity", "value": _x(de) + trend, "tone": _tone(de, 0.5, 1.0, False),
+                    "hint": f"vs {_x(old_de)} two years earlier"})
     wc = a0.get("cash_conversion_cycle_days")
-    out.append({"group": "Debt", "label": "Cash cycle", "value": "-" if wc is None else f"{wc:.0f} days",
-                "tone": _tone(wc, 60, 120, False), "hint": "Days cash is tied up in stock and dues"})
+    if not lender:
+        out.append({"group": "Debt", "label": "Cash cycle", "value": "-" if wc is None else f"{wc:.0f} days",
+                    "tone": _tone(wc, 60, 120, False), "hint": "Days cash is tied up in stock and dues"})
 
     pledge = pl.get("pledged_pct_of_promoter_shares")
     out.append({"group": "Owners", "label": "Promoter shares pledged", "value": _pct(pledge) if pl and pledge else "None",
                 "tone": "good" if not pl or not pledge else _tone(pledge, 0, 10, False),
-                "hint": f"= {_pct(pl.get('pledged_pct_of_total_shares'))} of all shares" if pl else "No pledge disclosed"})
+                "hint": f"= {_pct(pl.get('pledged_pct_of_total_shares'))} of all shares" if pl and pledge else "No pledge disclosed"})
     if len(sh) >= 2:
         new, old = sh[0], sh[-1]
         dp = (new.get("promoter") or 0) - (old.get("promoter") or 0)

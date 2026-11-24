@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% from "_ui.html" import icon, verdict %}
+{% block title %}Track record · Stock Council{% endblock %}
+{% block main %}
+<a class="back" href="/history">{{ icon('back', 16) }}History</a>
+<section class="head"><div><p class="eyebrow">Track record</p><h1>How the calls did</h1></div></section>
+<p class="muted lead">Price change from the day of each call to the latest close, adjusted for splits.{% if max_days < 5 %} It's early: the oldest call is {{ max_days }} day{{ 's' if max_days != 1 }} old, so give it a few weeks.{% endif %}</p>
+
+{% if sum.by_call %}
+<div class="nums">
+{% for c in sum.by_call %}{% set k = {'BUY':'buy','SELL':'sell','HOLD':'hold'}.get(c.call, 'split') %}
+  <div class="num {{ 'good' if c.avg > 0 else 'bad' if c.avg < 0 else '' }}"><span class="lbl">{{ verdict({'call': c.call}) }} · {{ c.n }} call{{ 's' if c.n != 1 }}</span><b>{{ '%+.1f'|format(c.avg) }}%</b><span class="hint">{{ c.up }} of {{ c.n }} went up</span></div>
+{% endfor %}
+</div>
+
+<h2 class="sub">{{ icon('council', 18) }}Which AI is right most often</h2>
+<p class="muted small">Right = said buy and it rose, or said sell and it fell. Holds aren't scored.</p>
+<div class="tblwrap card"><table class="tbl">
+  <tr><th>AI</th><th>Calls</th><th>Right</th><th>Avg after its buys</th></tr>
+  {% for a in sum.by_ai %}<tr><td>{{ a.name }}</td><td>{{ a.calls }}</td><td>{{ a.right }}</td><td class="{{ 'neg' if a.buy_avg and a.buy_avg < 0 }}">{{ '%+.1f'|format(a.buy_avg) ~ '%' if a.buy_avg is not none else '–' }}</td></tr>{% endfor %}
+</table></div>
+
+<h2 class="sub">{{ icon('history', 18) }}Every call</h2>
+<ul class="stocks">
+{% for r in rows %}
+<li><a class="row" href="/stock/{{ r.run_id }}/{{ r.isin }}">
+  <span class="who"><b>{{ (r.name or r.symbol)|nice }}</b><span class="muted">{{ r.day|day }} · ₹{{ '%.2f'|format(r.call_price) }} → ₹{{ '%.2f'|format(r.now) if r.now else '–' }}</span></span>
+  <span class="vote">{{ verdict({'call': r.call}) }}</span>
+  <span class="score"><b class="{{ 'pos' if r.ret > 0 else 'neg' if r.ret < 0 }}">{{ '%+.1f'|format(r.ret) if r.ret == r.ret else '–' }}%</b></span>
+  {{ icon('chev', 18, 'chev') }}
+</a></li>{% endfor %}
+</ul>
+{% else %}<div class="empty card">No calls yet.</div>{% endif %}
+{% endblock %}

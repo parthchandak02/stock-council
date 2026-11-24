@@ -30,7 +30,7 @@ def _list(name: str) -> list[str]:
     return [x.strip() for x in os.environ.get(name, "").split(",") if x.strip()]
 
 
-def build_email(run: dict, picks: list[dict]) -> tuple[str, str, str]:
+def build_email(run: dict, picks: list[dict], screens: list[dict] | None = None) -> tuple[str, str, str]:
     site = os.environ.get("SC_SITE_URL", "")
     buys = sum(1 for p in picks if (p.get("verdict") or {}).get("call") == "BUY")
     subject = f"Stock council {run['day']}: {len(picks)} stocks, {buys} BUY"
@@ -60,10 +60,16 @@ def build_email(run: dict, picks: list[dict]) -> tuple[str, str, str]:
         "<tr style='text-align:left;color:#777;font-size:12px'><th style='padding:6px 8px'>Stock</th>"
         "<th style='padding:6px 8px'>Council</th><th style='padding:6px 8px'>Why</th></tr>"
         + "".join(rows_html) + "</table>"
+        + ("<p style='margin:18px 0 4px;font-weight:600'>Your saved screens</p><ul style='margin:0;padding-left:18px'>"
+           + "".join(f"<li><a href='{html.escape(site)}/screener?s={s['id']}'>{html.escape(s['name'])}</a>: "
+                     f"{s['count']} match{'es' if s['count'] != 1 else ''}"
+                     + (f", <b>{s['new']} new</b>" if s['new'] else "") + "</li>" for s in screens) + "</ul>"
+           if screens else "")
         + (f"<p style='margin:16px 0 0'><a href='{html.escape(site)}'>Open the full analysis</a></p>" if site else "")
         + "<p style='color:#999;font-size:11px;margin-top:16px'>Facts from NSE/BSE filings; opinions from 7 AI models. "
         "Not investment advice.</p></div>")
-    body_txt = "\n".join([f"{len(picks)} stocks passed today's screen.", "", *rows_txt, "", site])
+    body_txt = "\n".join([f"{len(picks)} stocks passed today's screen.", "", *rows_txt, "",
+                          *[f"Saved screen {s['name']}: {s['count']} matches, {s['new']} new" for s in screens or []], "", site])
     return subject, body_html, body_txt
 
 

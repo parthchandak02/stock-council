@@ -28,6 +28,20 @@
 </section>
 {% if p.error %}<div class="note bad">{{ icon('alert', 16) }}<span>{{ p.error[:300] }}</span></div>{% endif %}
 
+
+{% if chart %}
+<div class="chart card" aria-label="One-year price chart">
+  <div class="chart-top"><span class="muted small">1 year · adjusted for splits</span><span class="small"><span class="muted">low</span> ₹{{ chart.lo }} <span class="muted">· high</span> ₹{{ chart.hi }}</span></div>
+  <svg viewBox="0 -2 {{ chart.W }} {{ chart.H + 34 }}" preserveAspectRatio="none" role="img">
+    <path d="{{ chart.area }}" class="area {{ 'up' if chart.up else 'down' }}"/>
+    <path d="{{ chart.path }}" class="line {{ 'up' if chart.up else 'down' }}" vector-effect="non-scaling-stroke"/>
+    {% for x, h in chart.bars %}<rect x="{{ '%.1f'|format(x) }}" y="{{ '%.1f'|format(chart.H + 32 - h) }}" width="1.6" height="{{ '%.1f'|format(h) }}" class="vbar"/>{% endfor %}
+    {% for x, y in chart.spikes %}<circle cx="{{ '%.1f'|format(x) }}" cy="{{ '%.1f'|format(y) }}" r="3.5" class="spk"/>{% endfor %}
+    {% if chart.mark %}<line x1="{{ '%.1f'|format(chart.mark[0]) }}" x2="{{ '%.1f'|format(chart.mark[0]) }}" y1="0" y2="{{ chart.H + 32 }}" class="mk"/>{% endif %}
+  </svg>
+  <p class="muted small chart-legend"><i class="spk-dot"></i> volume over 4× normal{% if chart.mark %} · <i class="mk-dot"></i> day of this call{% endif %}</p>
+</div>
+{% endif %}
 <h2 class="sub">{{ icon('shield', 18) }}The numbers <span class="muted small">from filings, not AI</span></h2>
 <div class="nums">
 {% for n in nums %}
@@ -55,6 +69,14 @@
 {% endfor %}
 </div>
 
+
+{% if peers and peers|length > 1 %}
+<h2 class="sub">{{ icon('council', 18) }}Same industry <span class="muted small">{{ (p.sheet.fundamentals or {}).industry or peers[0].industry }}</span></h2>
+<div class="tblwrap card"><table class="tbl peers">
+  <tr><th>Company</th><th>Market cap ₹ Cr</th><th>P/E</th><th>ROE %</th><th>Sales growth %</th><th>1-yr return %</th></tr>
+  {% for q in peers %}<tr class="{{ 'hl' if q.isin == p.isin }}"><td>{{ (q.name or q.symbol)|nice }}</td><td>{{ '{:,.0f}'.format(q.mcap) if q.mcap == q.mcap else '–' }}</td><td>{{ '%.1f'|format(q.pe) if q.pe == q.pe and q.pe is not none else '–' }}</td><td>{{ '%.1f'|format(q.roe) if q.roe is not none and q.roe == q.roe else '–' }}</td><td>{{ '%.1f'|format(q.sales_cagr_3y) if q.sales_cagr_3y is not none and q.sales_cagr_3y == q.sales_cagr_3y else '–' }}</td><td class="{{ 'neg' if q.ret_1y < 0 }}">{{ '%.1f'|format(q.ret_1y) if q.ret_1y == q.ret_1y else '–' }}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
 <details class="fold card" id="news" {{ 'open' if p.status in ('news','council') }}>
   <summary>{{ icon('news', 18) }}<b>News the AIs read</b>{{ icon('chevdown', 16, 'tw') }}</summary>
   <div class="md small">{{ (p.news or {}).text | md | safe }}</div>

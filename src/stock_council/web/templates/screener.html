@@ -26,7 +26,7 @@
 {% if res %}
 <form method="post" action="/council" id="pickform">
 <div class="reshead">
-  <h2 class="sub">{{ res.hits|length }} match{{ 'es' if res.hits|length != 1 }}</h2>
+  <h2 class="sub">{{ res.hits|length }} match{{ 'es' if res.hits|length != 1 }} <a class="csv" href="/screener.csv?{{ request.query_params }}">{{ icon('download', 14) }}CSV</a></h2>
   <button class="btn" id="askbtn" disabled>{{ icon('council', 16) }}<span>Ask the council</span></button>
 </div>
 <p class="muted small pickhint">Tick up to 10 stocks to send them to the council (about $0.06 each).</p>
@@ -60,4 +60,4 @@
 <p class="muted small">Fundamentals: {{ res.fund_count|num }} companies, refreshed on a rolling weekly cycle (newest {{ res.fund_updated|day }}). Prices, volume and delivery: every trading evening.</p>
 {% endif %}
 {% endblock %}
-{% block scripts %}<script src="/static/screener.js?v=1"></script>{% endblock %}
+{% block scripts %}<script src="/static/screener.js?v=2"></script>{% endblock %}

@@ -2,7 +2,7 @@
 {% block title %}History · Stock Council{% endblock %}
 {% block main %}
 <section class="head"><div><p class="eyebrow">History</p><h1>Every run, kept</h1></div></section>
-<p class="muted lead">So we can later check which calls were right.</p>
+<a class="card trackcta" href="/track">{{ icon('target', 20) }}<span><b>Track record</b><span class="muted small">How every call has done since, and which AI is right most often</span></span>{{ icon('chev', 18, 'chev') }}</a>
 <ul class="stocks">
 {% for r in runs %}
 <li><a class="row" href="/run/{{ r.id }}">

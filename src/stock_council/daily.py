@@ -156,6 +156,8 @@ def run_screen_job(kind: str = "daily", max_stocks: int = 20, require_today: boo
         latest = trading_dates(conn, 1)[0]
         if require_today and latest != ist_today():
             raise NothingToDo(f"no exchange data for {ist_today()} yet (latest {latest})")
+        from .upkeep import before_screen
+        before_screen()
         if kind == "daily" and conn.execute(
                 "SELECT 1 FROM runs WHERE kind='daily' AND day=? AND status='done' AND id!=?", (latest, run_id)).fetchone():
             raise NothingToDo(f"daily run for {latest} already done")

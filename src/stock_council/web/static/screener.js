@@ -5,6 +5,18 @@
     list.insertAdjacentHTML('beforeend', tpl.innerHTML);
     list.lastElementChild.querySelector('input').focus();
   });
+  // Each rule's value is a number or another measure ("@key"), kept in the hidden v field.
+  function sync(rule) {
+    const num = rule.querySelector('.num'), vs = rule.querySelector('.vs'), hid = rule.querySelector('input[name=v]');
+    if (!num) return;
+    const measure = vs.value !== '';
+    num.classList.toggle('hide', measure); vs.classList.toggle('on', measure);
+    num.required = !measure;
+    hid.value = measure ? vs.value : num.value;
+  }
+  list?.addEventListener('input', e => { const r = e.target.closest('.rule'); if (r) sync(r); });
+  list?.addEventListener('change', e => { const r = e.target.closest('.rule'); if (r) sync(r); });
+  document.getElementById('rules')?.addEventListener('submit', () => list.querySelectorAll('.rule').forEach(sync));
   list?.addEventListener('click', e => {
     const b = e.target.closest('.rm'); if (b) b.closest('.rule').remove();
   });

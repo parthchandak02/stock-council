@@ -44,6 +44,8 @@ def volume_spikes(conn, filters: dict) -> tuple[str, pd.DataFrame]:
         "SELECT date, isin, SUM(volume) AS vol FROM daily WHERE date >= ? GROUP BY date, isin",
         conn, params=(dates[-1],),
     )
+    from .actions import adjust
+    df = adjust(df, conn)  # splits/bonuses: earlier volumes in today's share terms
     g = df.groupby("isin")
     stats = pd.DataFrame({
         "vol_1y_avg": g["vol"].mean(),
@@ -89,6 +91,7 @@ def get_fundamentals(conn, ident: dict) -> dict:
         cache_put(conn, key, cached)
     # re-price with today's exchange close so market cap and P/E are current
     f = dict(cached)
+    f.update(_sector(conn, ident["isin"], f))
     if ident["close"] and f.get("shares_cr"):
         f["price"] = ident["close"]
         f["market_cap_cr"] = round(ident["close"] * f["shares_cr"], 1)
@@ -98,6 +101,19 @@ def get_fundamentals(conn, ident: dict) -> dict:
         if cached.get("pb") and cached.get("market_cap_cr"):
             f["pb"] = round(cached["pb"] * f["market_cap_cr"] / cached["market_cap_cr"], 2)
     return f
+
+
+def _sector(conn, isin: str, f: dict) -> dict:
+    """Sector, industry and whether it is a lender, from the Screener's universe table."""
+    from .universe import is_lender
+    sector, industry = f.get("sector"), f.get("industry")
+    try:
+        row = conn.execute("SELECT sector, industry FROM universe WHERE isin=?", (isin,)).fetchone()
+        if row and row["sector"]:
+            sector, industry = row["sector"], row["industry"]
+    except Exception:
+        pass
+    return {"sector": sector, "industry": industry, "lender": is_lender(sector, industry)}
 
 
 def check(f: dict, filters: dict) -> list[str]:
@@ -110,7 +126,7 @@ def check(f: dict, filters: dict) -> list[str]:
         fails.append(f"P/E {pe} ≥ {filters['max_pe']}" if pe is not None else "P/E n/a (loss)")
     if roe is None or roe <= filters["min_roe_pct"]:
         fails.append(f"ROE {roe}% ≤ {filters['min_roe_pct']}%")
-    if de is None or de >= filters["max_debt_to_equity"]:
+    if not f.get("lender") and (de is None or de >= filters["max_debt_to_equity"]):  # not for banks/NBFCs
         fails.append(f"D/E {de} ≥ {filters['max_debt_to_equity']}")
     return fails
 

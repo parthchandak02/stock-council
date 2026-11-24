@@ -7,7 +7,6 @@ Price, volume and delivery metrics are computed from our own NSE/BSE files every
 """
 from __future__ import annotations
 
-import concurrent.futures as cf
 import logging
 import threading
 import time
@@ -31,6 +30,16 @@ CREATE TABLE IF NOT EXISTS universe (
     updated TEXT, error TEXT
 );
 """
+NEW_COLS = ["opm REAL", "npm REAL", "interest_cover REAL", "q_sales_yoy REAL", "q_profit_yoy REAL",
+            "div_yield REAL", "ev_ebitda REAL", "lender INTEGER"]
+LENDER_WORDS = ("bank", "credit services", "mortgage", "insurance - ", "financial conglomerate")
+
+
+def is_lender(sector, industry) -> bool:
+    """Banks, NBFCs, home-finance and insurers: deposits/borrowings are their raw material, so
+    debt/equity, cash cycle and cash-conversion rules don't apply to them."""
+    ind = (industry or "").lower()
+    return (sector or "") == "Financial Services" and any(w in ind for w in LENDER_WORDS)
 
 # key -> (label, group, unit, help). The order here is the order in the Screener's picker.
 METRICS = {
@@ -57,7 +66,21 @@ METRICS = {
     "de": ("Debt / equity", "Quality", "", "Latest balance sheet"),
     "sales_cagr_3y": ("Sales growth, 3 yr", "Growth", "%", "Yearly average"),
     "profit_cagr_3y": ("Profit growth, 3 yr", "Growth", "%", "Yearly average"),
+    "q_sales_yoy": ("Quarter sales vs year ago", "Growth", "%", "Latest quarter vs same quarter last year"),
+    "q_profit_yoy": ("Quarter profit vs year ago", "Growth", "%", "Latest quarter vs same quarter last year"),
+    "opm": ("Operating margin", "Quality", "%", "EBITDA ÷ sales, last year"),
+    "npm": ("Net margin", "Quality", "%", "Profit ÷ sales, last year"),
+    "interest_cover": ("Interest cover", "Quality", "×", "Operating profit ÷ interest"),
+    "div_yield": ("Dividend yield", "Size & value", "%", "Last 12 months"),
+    "ev_ebitda": ("EV / EBITDA", "Size & value", "×", "Enterprise value ÷ EBITDA"),
     "cfo_conv": ("Profit turning into cash", "Cash", "%", "Operating cash ÷ (profit + depreciation)"),
+    "promoter": ("Promoter holding", "Owners", "%", "Latest quarter"),
+    "promoter_chg": ("Promoter change, 1 yr", "Owners", "pts", "Percentage points vs a year ago"),
+    "pledge": ("Promoter shares pledged", "Owners", "%", "Share of promoter holding pledged"),
+    "fii": ("Foreign funds (FII)", "Owners", "%", ""),
+    "dii": ("Indian funds (DII)", "Owners", "%", ""),
+    "funds": ("All funds (FII + DII)", "Owners", "%", ""),
+    "funds_chg": ("Funds change, 1 yr", "Owners", "pts", "FII + DII vs a year ago"),
     "fcf": ("Free cash flow", "Cash", "₹ Cr", "Last year"),
     "fcf_neg_years": ("Years of negative free cash", "Cash", "of 3", ""),
 }
@@ -81,6 +104,14 @@ _db_lock = threading.Lock()
 def db():
     conn = connect()
     ensure_schema(conn, "universe", SCHEMA)
+    if not getattr(db, "_migrated", False):
+        for col in NEW_COLS:
+            try:
+                conn.execute(f"ALTER TABLE universe ADD COLUMN {col}")
+            except Exception:
+                pass
+        conn.commit()
+        db._migrated = True
     return conn
 
 
@@ -99,6 +130,12 @@ def candidates(conn) -> pd.DataFrame:
     return df
 
 
+COLS = ["isin", "symbol", "bse_code", "yahoo", "name", "sector", "industry", "shares_cr", "ttm_profit", "ttm_sales",
+        "equity", "roe", "roe_3y", "roce", "roa", "de", "sales_cagr_3y", "profit_cagr_3y", "cfo_conv", "fcf",
+        "fcf_neg_years", "asset_turnover", "updated", "error", "opm", "npm", "interest_cover", "q_sales_yoy",
+        "q_profit_yoy", "div_yield", "ev_ebitda", "lender"]
+
+
 def _row(c: pd.Series, f: dict | None, err: str | None) -> tuple:
     a0 = (f or {}).get("annual", [{}])[0] if (f or {}).get("annual") else {}
     neg = sum(1 for a in ((f or {}).get("annual") or [])[:3] if (a.get("free_cash_flow") or 0) < 0)
@@ -108,44 +145,67 @@ def _row(c: pd.Series, f: dict | None, err: str | None) -> tuple:
             g("shares_cr"), g("ttm_net_profit"), g("ttm_sales"), eq,
             g("roe_pct"), g("roe_3y_avg_pct"), g("roce_pct"), g("roa_pct"), g("debt_to_equity"),
             g("sales_cagr_3y_pct"), g("profit_cagr_3y_pct"), a0.get("cfo_to_profit_plus_dep_pct"),
-            a0.get("free_cash_flow"), neg if f else None, g("asset_turnover"), date.today().isoformat(), err)
+            a0.get("free_cash_flow"), neg if f else None, g("asset_turnover"), date.today().isoformat(), err,
+            g("opm_pct"), g("npm_pct"), g("interest_cover"), g("q_sales_yoy_pct"), g("q_profit_yoy_pct"),
+            g("div_yield_pct"), g("ev_ebitda"), int(is_lender(g("sector"), g("industry"))) if f else None)
 
 
-def refresh(limit: int | None = None, max_age_days: int = 7, workers: int = 3) -> dict:
-    """Fetch fundamentals for universe companies that are missing or older than max_age_days."""
+def refresh(limit: int | None = None, max_age_days: int = 7, force: list[str] | None = None,
+            pause: float = 0.6) -> dict:
+    """Fetch fundamentals for companies that are missing, failed (retried after a day) or older than
+    max_age_days; `force` = ISINs to refresh now (e.g. results just out).
+
+    One at a time with a short pause: Yahoo answers a burst with empty data, which must not be
+    mistaken for "this company has no financials". Several empties in a row -> long pause."""
     conn = db()
     cands = candidates(conn)
-    have = {r["isin"]: r["updated"] for r in conn.execute("SELECT isin, updated FROM universe")}
+    have = {r["isin"]: (r["updated"], r["error"]) for r in conn.execute("SELECT isin, updated, error FROM universe")}
     today = date.today()
-    todo = cands[[(i not in have) or (today - date.fromisoformat(have[i])).days >= max_age_days for i in cands["isin"]]]
-    # missing first, then oldest
-    todo = todo.assign(_age=[have.get(i, "0000-00-00") for i in todo["isin"]]).sort_values("_age")
+
+    def due(i):
+        if force and i in force:
+            return True
+        if i not in have:
+            return True
+        upd, err = have[i]
+        age = (today - date.fromisoformat(upd)).days
+        return age >= (1 if err else max_age_days)
+
+    todo = cands[[due(i) for i in cands["isin"]]]
+    todo = todo.assign(_age=[(have.get(i) or ("0000-00-00",))[0] for i in todo["isin"]]).sort_values("_age")
     if limit:
         todo = todo.head(limit)
     stats = {"universe": len(cands), "todo": len(todo), "ok": 0, "failed": 0}
-
-    def one(c):
+    empties = 0
+    for i, (_, c) in enumerate(todo.iterrows()):
+        f, err = None, None
         for attempt in range(3):
             try:
                 f = fundamentals.fetch(c["yahoo"], with_sector=True)
-                return c, f, None
+                empties = 0
+                break
             except LookupError as e:
-                return c, None, str(e)[:200]
-            except Exception as e:  # rate limit / network: back off
-                time.sleep(5 * (attempt + 1))
-                last = str(e)[:200]
-        return c, None, last
-
-    with cf.ThreadPoolExecutor(max_workers=workers) as ex:
-        for i, (c, f, err) in enumerate(ex.map(one, [r for _, r in todo.iterrows()])):
-            with _db_lock:
-                conn.execute(f"INSERT OR REPLACE INTO universe VALUES ({','.join('?' * 24)})", _row(c, f, err))
-                if f:
-                    cache_put(conn, f"fund:{c['yahoo']}", f)
-                conn.commit()
-            stats["ok" if f else "failed"] += 1
-            if i and i % 100 == 0:
-                log.info("universe: %d/%d", i, len(todo))
+                err = str(e)[:200]
+                empties += 1
+                if empties >= 5:           # looks like throttling, not missing data
+                    log.warning("universe: %d empty replies in a row, pausing", empties)
+                    time.sleep(120)
+                    empties = 0
+                    continue
+                break
+            except Exception as e:
+                err = str(e)[:200]
+                time.sleep(10 * (attempt + 1))
+        with _db_lock:
+            conn.execute(f"INSERT OR REPLACE INTO universe ({','.join(COLS)}) VALUES ({','.join('?' * len(COLS))})",
+                         _row(c, f, None if f else err))
+            if f:
+                cache_put(conn, f"fund:{c['yahoo']}", f)
+            conn.commit()
+        stats["ok" if f else "failed"] += 1
+        if i and i % 100 == 0:
+            log.info("universe: %d/%d (%d failed)", i, len(todo), stats["failed"])
+        time.sleep(pause)
     return stats
 
 
@@ -167,11 +227,13 @@ def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
         "COALESCE(MAX(CASE WHEN exch='NSE' THEN close END), MAX(close)) close, "
         "COALESCE(MAX(CASE WHEN exch='NSE' THEN prev_close END), MAX(prev_close)) prev "
         f"FROM daily WHERE date >= ? GROUP BY date, isin", conn, params=(dates[-1],))
+    from .actions import adjust
+    df = adjust(df, conn, price_cols=("close", "prev"), volume_cols=("vol", "dq"))
     today = dates[0]
-    close = df.pivot(index="date", columns="isin", values="close").sort_index()
-    vol = df.pivot(index="date", columns="isin", values="vol").sort_index()
-    dq = df.pivot(index="date", columns="isin", values="dq").sort_index()
-    last = df[df["date"] == today].set_index("isin")
+    close = df.pivot_table(index="date", columns="isin", values="close", aggfunc="last").sort_index()
+    vol = df.pivot_table(index="date", columns="isin", values="vol", aggfunc="sum").sort_index()
+    dq = df.pivot_table(index="date", columns="isin", values="dq", aggfunc="sum").sort_index()
+    last = df[df["date"] == today].groupby("isin").agg({"close": "last", "prev": "last", "vol": "sum", "t": "sum", "dq": "sum"})
 
     def ret(n):
         base = close.iloc[-n - 1] if len(close) > n else close.iloc[0]
@@ -197,6 +259,16 @@ def table(conn) -> tuple[str, pd.DataFrame]:
     today, pm = price_metrics(conn)
     u = pd.read_sql_query("SELECT * FROM universe WHERE error IS NULL", conn).set_index("isin")
     df = u.join(pm, how="inner")
+    try:
+        from .ownership import db as _odb
+        _odb()
+        o = pd.read_sql_query("SELECT isin, promoter, promoter_1y, pledge, fii, dii, fii_1y, dii_1y FROM ownership", conn).set_index("isin")
+        df = df.join(o, how="left")
+        df["promoter_chg"] = df["promoter"] - df["promoter_1y"]
+        df["funds"] = df["fii"] + df["dii"]
+        df["funds_chg"] = df["funds"] - (df["fii_1y"] + df["dii_1y"])
+    except Exception as e:
+        log.warning("ownership not joined: %s", e)
     df["mcap"] = df["price"] * df["shares_cr"]
     df["pe"] = np.where(df["ttm_profit"] > 0, df["mcap"] / df["ttm_profit"], np.nan)
     df["pb"] = np.where(df["equity"] > 0, df["mcap"] / df["equity"], np.nan)
@@ -213,8 +285,15 @@ def run_rules(rules: list, conn=None, limit: int = 200) -> dict:
         if key not in df.columns:
             continue
         col = df[key]
-        mask &= (col > val) if op == ">" else (col < val)
-        mask &= col.notna()
+        if isinstance(val, str) and val.startswith("@") and val[1:] in df.columns:
+            other = df[val[1:]]           # compare two measures, e.g. ROE above ROCE
+            cond = ((col > other) if op == ">" else (col < other)) & other.notna()
+        else:
+            cond = (col > val) if op == ">" else (col < val)
+        cond &= col.notna()
+        if key == "de" and "lender" in df.columns:
+            cond |= df["lender"].fillna(0).astype(bool)   # debt/equity doesn't apply to lenders
+        mask &= cond
     hits = df[mask].copy()
     sort_key = next((k for k, _, _ in rules if k == "spike_x"), "mcap")
     hits = hits.sort_values(sort_key, ascending=False).head(limit)

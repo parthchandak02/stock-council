@@ -62,11 +62,14 @@ MANIFEST = {
 def _warm():
     """Compute the Screener's price metrics in the background so the first visit is instant."""
     def go():
-        try:
-            from ..universe import price_metrics
-            price_metrics(db())
-        except Exception:
-            pass
+        import time
+        from ..universe import price_metrics
+        while True:  # recompute soon after the evening files land, not on a visitor's click
+            try:
+                price_metrics(db())
+            except Exception:
+                pass
+            time.sleep(600)
     threading.Thread(target=go, daemon=True).start()
 
 
@@ -171,7 +174,8 @@ def stock(request: Request, run_id: int, isin: str):
     if p["status"] in ("queued", "facts"):
         return RedirectResponse(f"/run/{run_id}", status_code=303)
     return tpl.TemplateResponse(request, "stock.html", {
-        "run": run, "p": p, "nums": key_numbers(p.get("sheet") or {}), "why": why(p), "nav": "today"})
+        "run": run, "p": p, "nums": key_numbers(p.get("sheet") or {}), "why": why(p), "nav": "today",
+        "chart": price_chart(conn, isin, run["day"]), "peers": peers(conn, isin)})
 
 
 @app.post("/check")
@@ -265,9 +269,15 @@ def _rules_from(params) -> list:
     ms, os_, vs = params.getlist("m"), params.getlist("o"), params.getlist("v")
     rules = []
     for m, o, v in zip(ms, os_, vs):
+        v = (v or "").strip()
+        if m not in METRICS or o not in (">", "<") or not v:
+            continue
+        if v.startswith("@"):
+            if v[1:] in METRICS:
+                rules.append([m, o, v])       # compare with another measure
+            continue
         try:
-            if m in METRICS and o in (">", "<") and v.strip() != "":
-                rules.append([m, o, float(v)])
+            rules.append([m, o, float(v)])
         except ValueError:
             pass
     return rules
@@ -294,7 +304,8 @@ def screener(request: Request):
     if not rules and not q:
         active, rules = PRESETS[0], PRESETS[0]["rules"]
     res = run_rules(rules, conn) if rules else None
-    cols = DEFAULT_COLS + [k for k, _, _ in rules if k not in DEFAULT_COLS]
+    extra = [k for k, _, _ in rules] + [v[1:] for _, _, v in rules if isinstance(v, str)]
+    cols = DEFAULT_COLS + [k for k in dict.fromkeys(extra) if k not in DEFAULT_COLS]
     for s in saved:
         s["last"] = saved_screen_history(conn, s["id"])
     return tpl.TemplateResponse(request, "screener.html", {
@@ -338,6 +349,80 @@ async def council_batch(request: Request):
         items = [{"isin": i, "symbol": s, "name": s} for i, s in picks]
         threading.Thread(target=_quiet, args=(run_custom, run_id, items), daemon=True).start()
     return RedirectResponse(f"/run/{run_id}", status_code=303)
+
+
+# ---------- track record, chart, peers, csv ----------
+
+@app.get("/track", response_class=HTMLResponse)
+def track_page(request: Request):
+    from ..track import calls, summary
+    conn = db()
+    df = calls(conn)
+    rows = df.drop_duplicates(["isin", "day"]).to_dict("records") if not df.empty else []
+    return tpl.TemplateResponse(request, "track.html", {"rows": rows, "sum": summary(df),
+                                                        "max_days": int(df["days"].max()) if rows else 0, "nav": "history"})
+
+
+def price_chart(conn, isin: str, mark_day: str | None = None) -> dict | None:
+    """One year of adjusted closes as an SVG path, with high-volume days marked."""
+    import pandas as pd
+    from ..actions import adjust, aliases
+    ids = aliases(conn, isin)
+    df = pd.read_sql_query(
+        f"SELECT date, '{isin}' isin, COALESCE(MAX(CASE WHEN exch='NSE' THEN close END), MAX(close)) close, "
+        f"SUM(volume) vol FROM daily WHERE isin IN ({','.join('?' * len(ids))}) GROUP BY date ORDER BY date",
+        conn, params=ids)
+    if len(df) < 20:
+        return None
+    df = adjust(df, conn, price_cols=("close",), volume_cols=("vol",))
+    W, H = 600.0, 150.0
+    lo, hi = df["close"].min(), df["close"].max()
+    span = (hi - lo) or 1
+    xs = [i * W / (len(df) - 1) for i in range(len(df))]
+    ys = [H - 8 - (c - lo) / span * (H - 16) for c in df["close"]]
+    path = "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
+    vmax = df["vol"].max() or 1
+    bars = [(x, 30 * v / vmax) for x, v in zip(xs, df["vol"])]
+    spikes = [(x, y) for x, y, v in zip(xs, ys, df["vol"]) if v > 4 * df["vol"].median()]
+    mark = next(((x, y) for x, y, d in zip(xs, ys, df["date"]) if d == mark_day), None)
+    return {"path": path, "area": path + f" L{W},{H} L0,{H} Z", "bars": bars, "spikes": spikes[-12:], "mark": mark,
+            "lo": round(lo, 2), "hi": round(hi, 2), "first": df["date"].iloc[0], "last": df["date"].iloc[-1],
+            "up": df["close"].iloc[-1] >= df["close"].iloc[0], "W": W, "H": H}
+
+
+def peers(conn, isin: str, n: int = 6) -> list[dict]:
+    try:
+        from ..universe import table
+        row = conn.execute("SELECT industry FROM universe WHERE isin=?", (isin,)).fetchone()
+        if not row or not row["industry"]:
+            return []
+        _, df = table(conn)
+        g = df[(df["industry"] == row["industry"])].sort_values("mcap", ascending=False)
+        return g.head(n + 1).reset_index().to_dict("records")
+    except Exception:
+        return []
+
+
+@app.get("/screener.csv")
+def screener_csv(request: Request):
+    import csv, io
+    rules = _rules_from(request.query_params)
+    q = request.query_params
+    st = get_settings(db())
+    if q.get("preset"):
+        rules = next((p["rules"] for p in PRESETS if p["id"] == q["preset"]), rules)
+    elif q.get("s"):
+        rules = next((s["rules"] for s in st.get("screens") or [] if s["id"] == q["s"]), rules)
+    res = run_rules(rules, db(), limit=5000)
+    keys = ["symbol", "name", "sector", "industry"] + list(METRICS)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(keys)
+    for h in res["hits"]:
+        w.writerow(["" if h.get(k) is None or h.get(k) != h.get(k) else (round(h[k], 2) if isinstance(h[k], float) else h[k]) for k in keys])
+    from fastapi.responses import Response
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"content-disposition": f'attachment; filename="screen-{res["day"]}.csv"'})
 
 
 @app.get("/healthz")

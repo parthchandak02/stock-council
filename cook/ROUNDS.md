@@ -64,3 +64,12 @@ Next focus: [ ]
 - Published artifact YZzfhEMPSFpPwqw6e92THy for approval. Critics: not run yet (run on the real build).
 - Decisions: DII colour violet -> pink (ban on violet accent); no eyebrow labels; status chips sans, not mono caps; IBM Plex kept.
 - Next: wait for approval while planning the CSS port; build update bar (/version endpoint + poll).
+
+## Round 2 (2026-11-24 ~17:15 to 18:30 UTC): real build, approved mockups -> live
+- Parth: "Ok approved for now - Please go ahead and make all changes" + cost telemetry toggle, rectangular flags, Fireworks vs OpenRouter.
+- Built: new style.css (panels, shared-border grids, gauges with limit ticks, 7-block votes, vote ring), all templates rewritten, holdings.js now-bar + line-end labels, price chart with right axis + last-price tag.
+- Added: ai_calls log (tokens, cost, seconds per call; backfilled from saved opinions), Settings "AI costs" panel + show-costs switch, /version + update bar (2 min poll + on focus, never auto-reloads), SVG flags.
+- Measured: 0 overflow at 390 on all 9 pages after min-width fix; update bar shown after a real deploy and Reload loads the new build (playwright).
+- Fixed on the way: US Screener 500 (int 0/0, missing columns), build id unreadable by service user.
+- Critics: not run this round (time); next round should run 2.
+- Deployed d1dfb42 to /srv/stock-council, both services active, 12 live routes 200.

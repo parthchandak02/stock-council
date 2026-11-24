@@ -62,8 +62,11 @@ VOTE_GROUP = {"buy": "BUY", "stepwise buy": "BUY", "hold": "HOLD", "stepwise sel
 
 def _key() -> str:
     k = os.environ.get("OPENROUTER_API_KEY")
+    path = os.environ.get("SC_OPENROUTER_KEY_FILE")
+    if not k and path and os.path.exists(path):
+        k = open(path).read().strip()
     if not k:
-        raise RuntimeError("OPENROUTER_API_KEY is not set")
+        raise RuntimeError("no OpenRouter key: set OPENROUTER_API_KEY or SC_OPENROUTER_KEY_FILE")
     return k
 
 

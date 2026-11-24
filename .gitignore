@@ -1,0 +1,12 @@
+# secrets
+.env
+*.env
+*.token
+secrets/
+# data and local state
+data/
+*.db
+*.sqlite*
+__pycache__/
+.venv/
+.pytest_cache/

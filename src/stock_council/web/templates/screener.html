@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_ui.html" import icon, change, cost %}
 {% block title %}Screener · Stock Council{% endblock %}
 {% macro fmt(k, x) -%}
-{%- if x is none or x != x %}–{% elif k in ('mcap', 'turnover_cr', 'fcf') %}{{ '{:,.0f}'.format(x) }}{% elif k == 'volume' %}{{ '{:,.0f}'.format(x) }}{% elif k == 'price' %}{{ M.cur }}{{ '{:,.2f}'.format(x) if x < 1000 else '{:,.0f}'.format(x) }}{% elif k == 'spike_x' %}{{ '%.1f'|format(x) }}×{% elif k in ('de', 'pb', 'peg') %}{{ '%.2f'|format(x) }}{% elif k == 'fcf_neg_years' %}{{ x|int }}{% else %}{{ '%.1f'|format(x) }}{% endif -%}
+{%- if x is not defined or x is none or x != x %}–{% elif k in ('mcap', 'turnover_cr', 'fcf') %}{{ '{:,.0f}'.format(x) }}{% elif k == 'volume' %}{{ '{:,.0f}'.format(x) }}{% elif k == 'price' %}{{ M.cur }}{{ '{:,.2f}'.format(x) if x < 1000 else '{:,.0f}'.format(x) }}{% elif k == 'spike_x' %}{{ '%.1f'|format(x) }}×{% elif k in ('de', 'pb', 'peg') %}{{ '%.2f'|format(x) }}{% elif k == 'fcf_neg_years' %}{{ x|int }}{% else %}{{ '%.1f'|format(x) }}{% endif -%}
 {%- endmacro %}
 {% block main %}
 <div class="pagehead"><div><h1>Screener</h1>
@@ -56,7 +56,7 @@
       {% for h in res.hits %}
       <tr><td class="ck"><input type="checkbox" name="pick" value="{{ h.isin }}|{{ h.symbol }}" aria-label="Pick {{ h.symbol }}"></td>
         <td data-v="{{ (h.name or h.symbol)|nice }}"><b>{{ (h.name or h.symbol)|nice }}</b><span class="faint sym">{{ h.symbol }}{% if h.sector %} · {{ h.sector }}{% endif %}</span></td>
-        {% for k in cols %}{% set x = h[k] %}<td data-v="{{ x if x is not none and x == x else '' }}" class="{{ 'pos' if k in ('change_1d','ret_1w','ret_1m','ret_1y') and x and x > 0 else 'neg' if k in ('change_1d','ret_1w','ret_1m','ret_1y') and x and x < 0 }}">{% if k == 'spike_x' and x == x and x is not none %}<span class="spikebar"><span class="gauge"><i class="bg-warn" style="width:{{ (x / (top or 1) * 100)|round(0) }}%"></i></span>{{ fmt(k, x) }}</span>{% else %}{{ fmt(k, x) }}{% endif %}</td>{% endfor %}
+        {% for k in cols %}{% set x = h[k] if k in h else none %}<td data-v="{{ x if x is not none and x == x else '' }}" class="{{ 'pos' if k in ('change_1d','ret_1w','ret_1m','ret_1y') and x and x > 0 else 'neg' if k in ('change_1d','ret_1w','ret_1m','ret_1y') and x and x < 0 }}">{% if k == 'spike_x' and x == x and x is not none %}<span class="spikebar"><span class="gauge"><i class="bg-warn" style="width:{{ (x / (top or 1) * 100)|round(0) }}%"></i></span>{{ fmt(k, x) }}</span>{% else %}{{ fmt(k, x) }}{% endif %}</td>{% endfor %}
       </tr>{% endfor %}
       </tbody>
     </table></div>

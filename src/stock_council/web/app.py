@@ -42,11 +42,20 @@ B = MARKET["base"]
 
 
 def _build_id() -> str:
-    """Changes with every deploy (git pull + restart): the commit, else the newest template/static file."""
-    import subprocess
+    """Changes with every deploy (git pull + restart): the commit, read straight from .git (the service user
+    may not be allowed to run git on this checkout); else the newest template/static file."""
     try:
-        return subprocess.run(["git", "-C", str(HERE), "rev-parse", "--short", "HEAD"], capture_output=True,
-                              text=True, timeout=5).stdout.strip() or "dev"
+        git = next(p / ".git" for p in HERE.parents if (p / ".git").is_dir())
+        head = (git / "HEAD").read_text().strip()
+        if head.startswith("ref: "):
+            ref = head[5:]
+            f = git / ref
+            if f.exists():
+                return f.read_text().strip()[:10]
+            for line in (git / "packed-refs").read_text().splitlines():
+                if line.endswith(" " + ref):
+                    return line.split()[0][:10]
+        return head[:10]
     except Exception:
         files = list((HERE / "templates").iterdir()) + list(STATIC.iterdir())
         return str(int(max(f.stat().st_mtime for f in files)))

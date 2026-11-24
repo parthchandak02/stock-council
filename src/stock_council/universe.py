@@ -271,6 +271,8 @@ def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
         f"COALESCE(MAX(CASE WHEN exch='{PRIMARY_EXCH}' THEN close END), MAX(close)) close, "
         f"COALESCE(MAX(CASE WHEN exch='{PRIMARY_EXCH}' THEN prev_close END), MAX(prev_close)) prev "
         f"FROM daily WHERE date >= ? GROUP BY date, isin", conn, params=(dates[-1],))
+    for c in ("vol", "t", "dq", "close", "prev"):   # floats: 0/0 must give NaN, not raise (US has no delivery data)
+        df[c] = pd.to_numeric(df[c], errors="coerce").astype(float)
     from .actions import adjust
     df = adjust(df, conn, price_cols=("close", "prev"), volume_cols=("vol", "dq"))
     today = dates[0]

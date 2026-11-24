@@ -8,6 +8,7 @@
   --on-accent:#ffffff;
   --c-prom:#3b63c9; --c-fii:#0f8f80; --c-dii:#db2777; --c-govt:#64748b; --c-pure:#b7791f; --c-named:#cbd5e1;
   --r:12px; --pop:0 12px 32px rgba(15,23,36,.16);
+  color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root{
   --bg:#0f1724; --surf:#141e2d; --raise:#1a2638; --ink:#e7ecf3; --mute:#8f9cb0; --faint:#5d6b80; --line:#23314a; --line2:#2d3d58;
@@ -15,6 +16,7 @@
   --on-accent:#0b1220;
   --c-prom:#7aa2f7; --c-fii:#2dd4bf; --c-dii:#f472b6; --c-govt:#94a3b8; --c-pure:#fbbf24; --c-named:#475569;
   --pop:0 12px 32px rgba(0,0,0,.45);
+  color-scheme:dark;
 }}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -509,3 +511,12 @@ main>*,#live>*,.col>*,.settings>*{min-width:0}
   .rule>.sel:first-child,.rule>select:first-child{grid-column:1/-1}
   .rule .sel.op{grid-column:1}
 }
+
+/* Before ui.js swaps them in, native dropdowns are drawn to look exactly like ours: no white flash. */
+select{font:inherit;font-weight:500;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line2);border-radius:8px;
+  padding:8px 30px 8px 10px;width:100%;min-width:0;-webkit-appearance:none;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--mute) 50%),linear-gradient(135deg,var(--mute) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 55%,calc(100% - 10px) 55%;background-size:5px 5px;background-repeat:no-repeat}
+.sel select{background:none}
+.rule .val>select.vs{width:36px;flex:none;color:transparent;padding:8px 4px;background-image:none}
+.rule .val>select.vs.on{width:auto;flex:1;color:var(--ink)}

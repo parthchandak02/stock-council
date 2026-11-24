@@ -116,7 +116,7 @@
   document.addEventListener('click', e => { if (open && !open.wrap.contains(e.target)) close(); });
   window.addEventListener('resize', close);
   window.ui = {enhance};
+  enhance();   // this script sits at the end of <body>, so every select already exists: swap them before first paint
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => enhance());
-  else enhance();
   document.addEventListener('live:updated', e => enhance(e.target));
 })();

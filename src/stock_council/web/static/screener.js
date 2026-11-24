@@ -23,6 +23,50 @@
     const b = e.target.closest('.rm'); if (b) b.closest('.rule').remove();
   });
 
+  // ---- edits stick: every change is saved on the server (for everyone) as you type ----
+  const rulesForm = document.getElementById('rules'), from = rulesForm?.querySelector('input[name=from]')?.value;
+  function ruleParams() {
+    list.querySelectorAll('.rule').forEach(sync);
+    const fd = new URLSearchParams();
+    list.querySelectorAll('.rule').forEach(r => {
+      fd.append('m', r.querySelector('select[name=m]').value);
+      fd.append('o', r.querySelector('select[name=o]').value);
+      fd.append('v', r.querySelector('input[name=v]').value);
+    });
+    return fd;
+  }
+  let dt;
+  function draft() {
+    clearTimeout(dt);
+    dt = setTimeout(async () => {
+      const fd = ruleParams(); fd.append('from', from);
+      try {
+        const r = await fetch((window.B || '') + '/screener/draft', {method: 'POST', body: fd});
+        const d = await r.json();
+        const el = document.getElementById('editstate');
+        if (el && d.ok) el.innerHTML = d.edited ? '<span class="chip warn">Edited · saved</span>' : 'all must match';
+      } catch (e) {}
+    }, 500);
+  }
+  if (from && list) {
+    list.addEventListener('input', draft); list.addEventListener('change', draft);
+    list.addEventListener('click', e => { if (e.target.closest('.rm')) draft(); });
+    document.getElementById('addrule')?.addEventListener('click', draft);
+  }
+
+  // ---- Save: opens the save panel; the save form carries the current rules ----
+  const saveBtn = document.getElementById('savebtn'), box = document.getElementById('savebox'), saveForm = document.getElementById('saveform');
+  saveBtn?.addEventListener('click', () => {
+    box.hidden = !box.hidden; saveBtn.setAttribute('aria-expanded', String(!box.hidden));
+    if (!box.hidden) (box.querySelector('input[name=name]'))?.focus();
+  });
+  saveForm?.addEventListener('submit', e => {
+    const name = document.querySelector('input[name=name][form=saveform]');
+    if (e.submitter?.id === 'saveas' && !name.value.trim()) { e.preventDefault(); name.focus(); name.placeholder = 'Type a name first'; return; }
+    saveForm.querySelectorAll('.rp').forEach(x => x.remove());
+    for (const [k, v] of ruleParams()) saveForm.insertAdjacentHTML('beforeend', `<input type="hidden" class="rp" name="${k}" value="${String(v).replace(/"/g, '&quot;')}">`);
+  });
+
   const form = document.getElementById('pickform'), btn = document.getElementById('askbtn');
   form?.addEventListener('change', () => {
     const boxes = [...form.querySelectorAll('input[name=pick]')], n = boxes.filter(b => b.checked).length;

@@ -100,7 +100,13 @@ def funnel_steps(run: dict) -> list[tuple[str, int]]:
     return out
 
 
-tpl.env.globals.update(B=B, M=MARKET, IS_US=IS_US, BUILD=BUILD, show_costs=show_costs, funnel_steps=funnel_steps)
+def rules_qs(rules: list) -> str:
+    from urllib.parse import urlencode
+    return urlencode([(k, x) for m, o, v in rules for k, x in (("m", m), ("o", o), ("v", v))])
+
+
+tpl.env.globals.update(B=B, M=MARKET, IS_US=IS_US, BUILD=BUILD, show_costs=show_costs, funnel_steps=funnel_steps,
+                       rules_qs=rules_qs)
 tpl.env.filters["usd"] = usd
 tpl.env.globals.update(group=lambda v: VOTE_GROUP.get(str(v or "").lower(), ""), short_name=short_name,
                        key_numbers=key_numbers,
@@ -460,52 +466,126 @@ def _rules_from(params) -> list:
 DEFAULT_COLS = ["price", "change_1d", "mcap", "pe", "roe", "de", "spike_x", "delivery"]
 
 
+def _screen_state(conn) -> dict:
+    """What the Screener shows when opened: the last screen used and every screen's edited rules.
+    Kept on the server, so an edit made by Dad or Parth is still there for both next time."""
+    st = get_settings(conn).get("screener_state") or {}
+    return {"last": st.get("last") or "preset:" + PRESETS[0]["id"], "edits": st.get("edits") or {}}
+
+
+def _screen_base(key: str, saved: list) -> dict | None:
+    kind, _, ident = (key or "").partition(":")
+    if kind == "preset":
+        p = next((p for p in PRESETS if p["id"] == ident), None)
+        return p and {**p, "key": key, "kind": "preset"}
+    if kind == "s":
+        x = next((x for x in saved if x["id"] == ident), None)
+        return x and {**x, "key": key, "kind": "saved"}
+    return None
+
+
 @app.get("/screener", response_class=HTMLResponse)
 def screener(request: Request):
     conn = db()
     st = get_settings(conn)
     q = request.query_params
     saved = st.get("screens") or []
-    active = None
-    if q.get("preset"):
-        active = next((p for p in PRESETS if p["id"] == q["preset"]), None)
-        rules = active["rules"] if active else []
-    elif q.get("s"):
-        active = next((s for s in saved if s["id"] == q["s"]), None)
-        rules = active["rules"] if active else []
-    else:
+    state = _screen_state(conn)
+    key = ("preset:" + q["preset"]) if q.get("preset") else ("s:" + q["s"]) if q.get("s") else (q.get("from") or state["last"])
+    active = _screen_base(key, saved) or _screen_base("preset:" + PRESETS[0]["id"], saved)
+    key = active["key"]
+    if q.getlist("m"):                      # the rules form was submitted: these are the edits
         rules = _rules_from(q)
-    if not rules and not q:
-        active, rules = PRESETS[0], PRESETS[0]["rules"]
+        if rules != active["rules"]:
+            state["edits"][key] = rules
+        else:
+            state["edits"].pop(key, None)
+    else:
+        rules = state["edits"].get(key) or active["rules"]
+    state["last"] = key
+    save_setting(conn, "screener_state", state)
+    edited = key in state["edits"]
     res = run_rules(rules, conn) if rules else None
     extra = [k for k, _, _ in rules] + [v[1:] for _, _, v in rules if isinstance(v, str)]
     cols = DEFAULT_COLS + [k for k in dict.fromkeys(extra) if k not in DEFAULT_COLS]
-    for s in saved:
-        s["last"] = saved_screen_history(conn, s["id"])
-    return tpl.TemplateResponse(request, "screener.html", { "avg_stock": _avg_stock(),
-        "rules": rules, "res": res, "cols": cols, "metrics": METRICS, "presets": PRESETS,
-        "saved": saved, "active": active, "nav": "screener"})
+    for x in saved:
+        x["last"] = saved_screen_history(conn, x["id"])
+    from ..universe import SHOWN_PRESETS
+    shown = [p for p in PRESETS if p["id"] in SHOWN_PRESETS or "preset:" + p["id"] == key]
+    return tpl.TemplateResponse(request, "screener.html", {"avg_stock": _avg_stock(),
+        "rules": rules, "res": res, "cols": cols, "metrics": METRICS, "presets": shown, "edited_keys": list(state["edits"]),
+        "saved": saved, "active": active, "edited": edited, "nav": "screener"})
+
+
+@app.post("/screener/draft")
+async def screener_draft(request: Request):
+    """Called as you type: keeps unsubmitted edits so they survive leaving the page."""
+    form = await request.form()
+    conn = db()
+    state = _screen_state(conn)
+    base = _screen_base(form.get("from") or "", get_settings(conn).get("screens") or [])
+    if not base:
+        return JSONResponse({"ok": False}, status_code=400)
+    rules = _rules_from(form)
+    if rules and rules != base["rules"]:
+        state["edits"][base["key"]] = rules
+    elif rules == base["rules"]:
+        state["edits"].pop(base["key"], None)
+    state["last"] = base["key"]
+    save_setting(conn, "screener_state", state)
+    return {"ok": True, "edited": base["key"] in state["edits"]}
+
+
+@app.post("/screener/reset")
+def screener_reset(key: str = Form(...)):
+    conn = db()
+    state = _screen_state(conn)
+    state["edits"].pop(key, None)
+    save_setting(conn, "screener_state", state)
+    kind, _, ident = key.partition(":")
+    return RedirectResponse(B + ("/screener?preset=" if kind == "preset" else "/screener?s=") + ident, status_code=303)
 
 
 @app.post("/screener/save")
 async def screener_save(request: Request):
+    """Save the current rules: over the open saved screen (sid), or as a new one (name)."""
     form = await request.form()
     rules = _rules_from(form)
-    name = (form.get("name") or "").strip()[:60]
-    if not rules or not name:
-        return RedirectResponse(B + "/screener", status_code=303)
     conn = db()
     screens = get_settings(conn).get("screens") or []
-    sid = uuid.uuid4().hex[:8]
-    screens.append({"id": sid, "name": name, "rules": rules, "daily": form.get("daily") == "1"})
+    state = _screen_state(conn)
+    sid = (form.get("sid") or "").strip()
+    name = (form.get("name") or "").strip()[:60]
+    if not rules:
+        return RedirectResponse(B + "/screener", status_code=303)
+    if sid and any(x["id"] == sid for x in screens) and not name:
+        for x in screens:
+            if x["id"] == sid:
+                x["rules"] = rules
+                x["daily"] = form.get("daily") == "1"
+    elif name:
+        sid = uuid.uuid4().hex[:8]
+        screens.append({"id": sid, "name": name, "rules": rules, "daily": form.get("daily") == "1"})
+        if form.get("from"):
+            state["edits"].pop(form["from"], None)   # the edits now live in the new screen
+    else:
+        return RedirectResponse(B + "/screener", status_code=303)
+    state["edits"].pop("s:" + sid, None)
+    state["last"] = "s:" + sid
     save_setting(conn, "screens", screens)
+    save_setting(conn, "screener_state", state)
     return RedirectResponse(B + f"/screener?s={sid}", status_code=303)
 
 
 @app.post("/screener/delete")
 def screener_delete(sid: str = Form(...)):
     conn = db()
-    save_setting(conn, "screens", [s for s in get_settings(conn).get("screens") or [] if s["id"] != sid])
+    save_setting(conn, "screens", [x for x in get_settings(conn).get("screens") or [] if x["id"] != sid])
+    state = _screen_state(conn)
+    state["edits"].pop("s:" + sid, None)
+    if state["last"] == "s:" + sid:
+        state["last"] = "preset:" + PRESETS[0]["id"]
+    save_setting(conn, "screener_state", state)
     return RedirectResponse(B + "/screener", status_code=303)
 
 

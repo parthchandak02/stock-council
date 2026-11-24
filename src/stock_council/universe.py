@@ -349,3 +349,7 @@ def run_rules(rules: list, conn=None, limit: int = 200) -> dict:
     newest = conn.execute("SELECT max(updated), min(updated), count(*) FROM universe").fetchone()
     return {"day": today, "universe": total, "hits": hits.reset_index().to_dict("records"),
             "fund_updated": newest[0], "fund_oldest": newest[1], "fund_count": newest[2]}
+
+
+# The Screener lists only these two by default; the others stay usable by link.
+SHOWN_PRESETS = ["volume-shock", "quality"]

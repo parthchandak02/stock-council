@@ -7,63 +7,84 @@
 <div class="pagehead"><div><h1>Screener</h1>
   <p>{% if res %}{{ res.universe|num }} traded companies · prices of {{ res.day|day }}{% else %}Find stocks with your own rules{% endif %}</p></div></div>
 
-<div class="presets" role="list">
-  {% for p in presets %}<a role="listitem" class="preset {{ 'on' if active and active.id == p.id }}" href="{{ B }}/screener?preset={{ p.id }}" title="{{ p.desc }}"><b>{{ p.name }}</b><span>{{ p.desc }}</span></a>{% endfor %}
-  {% for s in saved %}<a role="listitem" class="preset saved {{ 'on' if active and active.id == s.id }}" href="{{ B }}/screener?s={{ s.id }}"><b>{{ icon('save', 13) }} {{ s.name }}</b><span>{% if s.last %}{{ s.last.count }} last night{% if s.last.new %} · {{ s.last.new|length }} new{% endif %}{% elif s.daily %}checked every evening{% else %}saved{% endif %}</span></a>{% endfor %}
-</div>
+<div class="scrlayout">
+  <nav class="panel screens" aria-label="Screens">
+    <div class="ph"><h2>{{ icon('filter', 16) }}Screens</h2></div>
+    <div class="scrlist">
+      {% for p in presets %}{% set key = 'preset:' ~ p.id %}
+      <a class="scr {{ 'on' if active.key == key }}" href="{{ B }}/screener?preset={{ p.id }}"><b>{{ p.name }}{% if key in edited_keys %}<i class="edot" title="Edited"></i>{% endif %}</b><span>{{ p.desc }}</span></a>
+      {% endfor %}
+      {% if saved %}<div class="scrhead">Your screens</div>{% endif %}
+      {% for x in saved %}{% set key = 's:' ~ x.id %}
+      <a class="scr {{ 'on' if active.key == key }}" href="{{ B }}/screener?s={{ x.id }}"><b>{{ x.name }}{% if key in edited_keys %}<i class="edot" title="Edited"></i>{% endif %}</b>
+        <span>{% if x.last %}{{ x.last.count }} last night{% if x.last.new %} · {{ x.last.new|length }} new{% endif %}{% elif x.daily %}checked every evening{% else %}saved{% endif %}</span></a>
+      {% endfor %}
+    </div>
+  </nav>
 
-<div class="two scr">
   <div class="col">
     <form class="panel rulebox" method="get" action="{{ B }}/screener" id="rules">
-      <div class="ph"><h2>{{ icon('filter', 16) }}Rules</h2><span class="r">all must match</span></div>
+      <input type="hidden" name="from" value="{{ active.key }}">
+      <div class="ph"><h2>{{ active.name }}</h2>
+        <span class="r" id="editstate">{% if edited %}<span class="chip warn">Edited</span>{% else %}all must match{% endif %}</span></div>
       <div id="rulelist">
       {% for k, o, v in rules %}{% include "_rule.html" %}{% endfor %}
       </div>
       <template id="ruletpl">{% with k='roe', o='>', v='' %}{% include "_rule.html" %}{% endwith %}</template>
       <div class="panel-foot">
-        <button type="button" class="btn ghost" id="addrule">{{ icon('plus', 15) }}Add rule</button>
-        <button class="btn">{{ icon('filter', 15) }}Screen</button>
+        <span class="acts-l">
+          <button type="button" class="btn ghost" id="addrule">{{ icon('plus', 15) }}Add rule</button>
+          {% if edited %}<button type="submit" class="btn ghost" form="resetform">{{ icon('back', 15) }}Reset</button>{% endif %}
+        </span>
+        <span class="acts">
+          <button type="button" class="btn" id="savebtn" aria-expanded="false" aria-controls="savebox">{{ icon('save', 15) }}Save</button>
+          <button class="btn">{{ icon('filter', 15) }}Screen</button>
+        </span>
+      </div>
+      <div class="savebox" id="savebox" hidden>
+        {% if active.kind == 'saved' %}
+        <p class="small muted">Save these rules over "{{ active.name }}", or keep them as a new screen.</p>
+        <div class="saverow">
+          <label class="check"><input type="checkbox" name="daily" value="1" form="saveform" {{ 'checked' if active.daily }}> Check every evening</label>
+          <button class="btn" form="saveform" name="sid" value="{{ active.id }}">{{ icon('check', 15) }}Save "{{ active.name }}"</button>
+        </div>
+        {% endif %}
+        <div class="saverow">
+          <input name="name" form="saveform" placeholder="{{ 'Or a new name' if active.kind == 'saved' else 'Name, e.g. Cheap quality' }}" maxlength="60" aria-label="Name for a new screen">
+          {% if active.kind != 'saved' %}<label class="check"><input type="checkbox" name="daily" value="1" form="saveform" checked> Every evening</label>{% endif %}
+          <button class="btn" form="saveform" id="saveas">{{ icon('save', 15) }}Save as new</button>
+        </div>
+        {% if active.kind == 'saved' %}<div class="saverow"><button class="btn ghost" form="delform">{{ icon('trash', 15) }}Delete "{{ active.name }}"</button></div>{% endif %}
       </div>
     </form>
+    <form method="post" action="{{ B }}/screener/save" id="saveform" hidden><input type="hidden" name="from" value="{{ active.key }}"></form>
+    <form method="post" action="{{ B }}/screener/reset" id="resetform" hidden><input type="hidden" name="key" value="{{ active.key }}"></form>
+    {% if active.kind == 'saved' %}<form method="post" action="{{ B }}/screener/delete" id="delform" hidden><input type="hidden" name="sid" value="{{ active.id }}"></form>{% endif %}
+
     {% if res %}
-    <details class="panel" id="savebox">
-      <summary class="ph"><h2>{{ icon('save', 16) }}Save this screen</h2><span class="r">check every evening {{ icon('chevdown', 14, 'tw') }}</span></summary>
-      <form method="post" action="{{ B }}/screener/save" class="saveform">
-        {% for k, o, v in rules %}<input type="hidden" name="m" value="{{ k }}"><input type="hidden" name="o" value="{{ o }}"><input type="hidden" name="v" value="{{ v }}">{% endfor %}
-        <input name="name" placeholder="Name, e.g. Cheap quality" required maxlength="60" aria-label="Screen name">
-        <label class="check"><input type="checkbox" name="daily" value="1" checked> Every evening</label>
-        <button class="btn">{{ icon('save', 15) }}Save</button>
-      </form>
-      {% if active and active.id in saved|map(attribute='id')|list %}
-      <form method="post" action="{{ B }}/screener/delete" class="saveform" style="padding-top:0"><input type="hidden" name="sid" value="{{ active.id }}"><button class="btn ghost">{{ icon('trash', 15) }}Delete "{{ active.name }}"</button></form>
-      {% endif %}
-    </details>
+    <form method="post" action="{{ B }}/council" id="pickform" class="panel">
+      <div class="ph"><h2>{{ res.hits|length }} match{{ 'es' if res.hits|length != 1 }}</h2>
+        <span class="acts"><a class="btn ghost" href="{{ B }}/screener.csv?{{ rules_qs(rules) }}">{{ icon('download', 15) }}CSV</a>
+        <button class="btn" id="askbtn" disabled>{{ icon('council', 15) }}<span>Ask the council</span></button></span></div>
+      {% if res.hits %}
+      <div class="tblwrap"><table class="tbl results" id="results">
+        <thead><tr><th class="ck"><span class="faint" title="Tick up to 10, then Ask the council">{{ icon('check', 13) }}</span></th><th data-k="name">Stock</th>
+        {% for k in cols %}<th data-k="{{ k }}" title="{{ metrics[k][3] }}">{{ metrics[k][0] }}{% if metrics[k][2] %} <span class="u">{{ metrics[k][2] }}</span>{% endif %}</th>{% endfor %}</tr></thead>
+        <tbody>
+        {% set top = (res.hits|map(attribute='spike_x')|reject('none')|max) if 'spike_x' in cols else 1 %}
+        {% for h in res.hits %}
+        <tr><td class="ck"><input type="checkbox" name="pick" value="{{ h.isin }}|{{ h.symbol }}" aria-label="Pick {{ h.symbol }}"></td>
+          <td data-v="{{ (h.name or h.symbol)|nice }}"><b>{{ (h.name or h.symbol)|nice }}</b><span class="faint sym">{{ h.symbol }}{% if h.sector %} · {{ h.sector }}{% endif %}</span></td>
+          {% for k in cols %}{% set x = h[k] if k in h else none %}<td data-v="{{ x if x is not none and x == x else '' }}" class="{{ 'pos' if k in ('change_1d','ret_1w','ret_1m','ret_1y') and x and x > 0 else 'neg' if k in ('change_1d','ret_1w','ret_1m','ret_1y') and x and x < 0 }}">{% if k == 'spike_x' and x == x and x is not none %}<span class="spikebar"><span class="gauge"><i class="bg-warn" style="width:{{ (x / (top or 1) * 100)|round(0) }}%"></i></span>{{ fmt(k, x) }}</span>{% else %}{{ fmt(k, x) }}{% endif %}</td>{% endfor %}
+        </tr>{% endfor %}
+        </tbody>
+      </table></div>
+      <div class="panel-foot"><span class="muted small">Tick up to 10, then Ask the council{% if show_costs() %} (about {{ (avg_stock or 0.06)|usd }} each){% endif %}.</span></div>
+      {% else %}<div class="empty small muted">Nothing matches every rule. Try loosening one.</div>{% endif %}
+    </form>
     <p class="faint small">Fundamentals: {{ res.fund_count|num }} companies, refreshed on a rolling weekly cycle (newest {{ res.fund_updated|day }}). Prices, volume{{ '' if IS_US else ' and delivery' }}: every trading evening.</p>
     {% endif %}
   </div>
-
-  {% if res %}
-  <form method="post" action="{{ B }}/council" id="pickform" class="panel">
-    <div class="ph"><h2>{{ res.hits|length }} match{{ 'es' if res.hits|length != 1 }}</h2>
-      <span class="r"><a class="csv" href="{{ B }}/screener.csv?{{ request.query_params }}">{{ icon('download', 14) }}CSV</a>
-      <button class="btn sm" id="askbtn" disabled>{{ icon('council', 15) }}<span>Ask the council</span></button></span></div>
-    {% if res.hits %}
-    <div class="tblwrap"><table class="tbl results" id="results">
-      <thead><tr><th class="ck"><span class="faint" title="Tick up to 10, then Ask the council">{{ icon('check', 13) }}</span></th><th data-k="name">Stock</th>
-      {% for k in cols %}<th data-k="{{ k }}" title="{{ metrics[k][3] }}">{{ metrics[k][0] }}{% if metrics[k][2] %} <span class="u">{{ metrics[k][2] }}</span>{% endif %}</th>{% endfor %}</tr></thead>
-      <tbody>
-      {% set top = (res.hits|map(attribute='spike_x')|reject('none')|max) if 'spike_x' in cols else 1 %}
-      {% for h in res.hits %}
-      <tr><td class="ck"><input type="checkbox" name="pick" value="{{ h.isin }}|{{ h.symbol }}" aria-label="Pick {{ h.symbol }}"></td>
-        <td data-v="{{ (h.name or h.symbol)|nice }}"><b>{{ (h.name or h.symbol)|nice }}</b><span class="faint sym">{{ h.symbol }}{% if h.sector %} · {{ h.sector }}{% endif %}</span></td>
-        {% for k in cols %}{% set x = h[k] if k in h else none %}<td data-v="{{ x if x is not none and x == x else '' }}" class="{{ 'pos' if k in ('change_1d','ret_1w','ret_1m','ret_1y') and x and x > 0 else 'neg' if k in ('change_1d','ret_1w','ret_1m','ret_1y') and x and x < 0 }}">{% if k == 'spike_x' and x == x and x is not none %}<span class="spikebar"><span class="gauge"><i class="bg-warn" style="width:{{ (x / (top or 1) * 100)|round(0) }}%"></i></span>{{ fmt(k, x) }}</span>{% else %}{{ fmt(k, x) }}{% endif %}</td>{% endfor %}
-      </tr>{% endfor %}
-      </tbody>
-    </table></div>
-    <div class="panel-foot"><span class="muted small">Tick up to 10 and ask the council{% if show_costs() %} (about {{ (avg_stock or 0.06)|usd }} each){% endif %}.</span></div>
-    {% else %}<div class="empty small muted">Nothing matches every rule. Try loosening one.</div>{% endif %}
-  </form>
-  {% endif %}
 </div>
 {% endblock %}
 {% block scripts %}<script src="/static/screener.js?v={{ BUILD }}"></script>{% endblock %}

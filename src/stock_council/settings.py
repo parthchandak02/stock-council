@@ -34,6 +34,7 @@ def get_settings(conn) -> dict:
         "email": {**DEFAULT_EMAIL, **(rows.get("email") or {})},
         "whatsapp": {**DEFAULT_WHATSAPP, **(rows.get("whatsapp") or {})},
         "telemetry": {**DEFAULT_TELEMETRY, **(rows.get("telemetry") or {})},
+        "screener_state": rows.get("screener_state") or {},   # last screen used + each screen's edited rules
     }
 
 

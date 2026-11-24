@@ -30,6 +30,9 @@ def before_screen() -> dict:
 def after_screen() -> dict:
     """Screener upkeep, after the email has gone: rolling fundamentals, ownership, saved screens."""
     from . import ownership, universe
+    from .config import IS_US
+    if IS_US:
+        return {"fundamentals": _step("fundamentals", universe.refresh, limit=600)}
     return {
         "fundamentals": _step("fundamentals", universe.refresh, limit=600),
         "ownership_bulk": _step("ownership bulk", ownership.refresh_bulk),

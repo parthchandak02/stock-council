@@ -2,7 +2,7 @@
 {% block title %}{{ p.name|nice }} · Stock Council{% endblock %}
 {% block main %}
 <div id="live" {% if p.status in ('news', 'council') %}data-poll="1"{% endif %}>{% set s = p.sheet or {} %}{% set t = s.technicals or {} %}{% set v = p.verdict or {} %}
-<a class="back" href="/">{{ icon('back', 16) }}Today</a>
+<a class="back" href="{{ B }}/">{{ icon('back', 16) }}Today</a>
 
 <section class="hero card">
   <div class="hero-id">
@@ -17,8 +17,9 @@
   </div>
   <dl class="facts3">
     <div><dt>Volume vs usual</dt><dd>{{ s.spike_x or '-' }}×</dd></div>
-    <div><dt>Delivered</dt><dd>{{ t.delivery_pct_today|round(0)|int if t.delivery_pct_today is not none else '-' }}%</dd></div>
-    <div><dt>Stop-loss</dt><dd>{% if v.stop_losses %}₹{{ v.stop_losses[0]|round(0)|int }}–{{ v.stop_losses[-1]|round(0)|int }}{% else %}-{% endif %}</dd></div>
+    {% if IS_US %}<div><dt>Short interest</dt><dd>{{ ((s.owners_us or {}).short_pct_float or 0)|round(1) }}%</dd></div>
+    {% else %}<div><dt>Delivered</dt><dd>{{ t.delivery_pct_today|round(0)|int if t.delivery_pct_today is not none else '-' }}%</dd></div>{% endif %}
+    <div><dt>Stop-loss</dt><dd>{% if v.stop_losses %}{{ M.cur }}{{ v.stop_losses[0]|round(0)|int }}–{{ v.stop_losses[-1]|round(0)|int }}{% else %}-{% endif %}</dd></div>
   </dl>
   {% if why.risk or why.trigger %}
   <div class="why">
@@ -27,13 +28,13 @@
   </div>{% endif %}
 </section>
 
-{% if p.status == 'done' %}
+{% if p.status == 'done' and not IS_US %}
 <section class="order card" id="order"
   data-name="{{ (p.name or p.symbol)|nice }}" data-symbol="{{ p.symbol }}" data-isin="{{ p.isin }}" data-run="{{ run.id }}"
   data-to="{{ broker.to }}" data-gmail="{{ broker.gmail }}">
   <h2 class="sub">{{ icon('mail', 18) }}Send an order to the broker</h2>
   {% if not broker.to or not broker.accounts %}
-  <p class="muted small">Add the broker's email addresses and your account codes in <a href="/settings#broker">Settings</a> first.</p>
+  <p class="muted small">Add the broker's email addresses and your account codes in <a href="{{ B }}/settings#broker">Settings</a> first.</p>
   {% else %}
   <div class="side" role="radiogroup" aria-label="Buy or sell">
     <label><input type="radio" name="side" value="buy" checked><span class="buy">{{ icon('up', 15) }}GTT Buy</span></label>
@@ -43,7 +44,7 @@
     <select name="account">{% for a in broker.accounts %}<option>{{ a }}</option>{% endfor %}</select>
   </label>
   <div class="lines">
-    <div class="lh muted small"><span>Quantity</span><span>Trigger price ₹</span><span></span></div>
+    <div class="lh muted small"><span>Quantity</span><span>Trigger price {{ M.cur }}</span><span></span></div>
     <div class="ol" id="lines"></div>
     <button type="button" class="btn ghost addline">{{ icon('plus', 15) }}Add a line</button>
   </div>
@@ -58,7 +59,7 @@
   {% endif %}
   {% if orders %}
   <details class="peek" id="orders-{{ p.isin }}"><summary>{{ icon('history', 14) }}Orders prepared for this stock · {{ orders|length }}{{ icon('chevdown', 14, 'tw') }}</summary>
-    <ul class="olog">{% for o in orders %}<li><span class="chip {{ o.side }}">{{ 'Buy' if o.side == 'buy' else 'Sell' }}</span> {{ o.account }} · {{ o.created|day }} · {% for l in o.lines %}{{ l.qty }}×₹{{ '%g'|format(l.price) }}{{ ', ' if not loop.last }}{% endfor %}</li>{% endfor %}</ul>
+    <ul class="olog">{% for o in orders %}<li><span class="chip {{ o.side }}">{{ 'Buy' if o.side == 'buy' else 'Sell' }}</span> {{ o.account }} · {{ o.created|day }} · {% for l in o.lines %}{{ l.qty }}×{{ M.cur }}{{ '%g'|format(l.price) }}{{ ', ' if not loop.last }}{% endfor %}</li>{% endfor %}</ul>
   </details>{% endif %}
 </section>
 {% endif %}
@@ -67,7 +68,7 @@
 
 {% if chart %}
 <div class="chart card" aria-label="One-year price chart">
-  <div class="chart-top"><span class="muted small">1 year · adjusted for splits</span><span class="small"><span class="muted">low</span> ₹{{ chart.lo }} <span class="muted">· high</span> ₹{{ chart.hi }}</span></div>
+  <div class="chart-top"><span class="muted small">1 year · adjusted for splits</span><span class="small"><span class="muted">low</span> {{ M.cur }}{{ chart.lo }} <span class="muted">· high</span> {{ M.cur }}{{ chart.hi }}</span></div>
   <svg viewBox="0 -2 {{ chart.W }} {{ chart.H + 34 }}" preserveAspectRatio="none" role="img">
     <path d="{{ chart.area }}" class="area {{ 'up' if chart.up else 'down' }}"/>
     <path d="{{ chart.path }}" class="line {{ 'up' if chart.up else 'down' }}" vector-effect="non-scaling-stroke"/>
@@ -98,7 +99,7 @@
   </summary>
   {% if not o.error %}
   <div class="ai-body">
-    {% if o.stop_loss or o.entry_zone %}<p class="muted small">{% if o.entry_zone %}Entry {{ o.entry_zone }}{% endif %}{% if o.stop_loss %}{{ ' · ' if o.entry_zone }}Stop ₹{{ o.stop_loss }}{% endif %}</p>{% endif %}
+    {% if o.stop_loss or o.entry_zone %}<p class="muted small">{% if o.entry_zone %}Entry {{ o.entry_zone }}{% endif %}{% if o.stop_loss %}{{ ' · ' if o.entry_zone }}Stop {{ M.cur }}{{ o.stop_loss }}{% endif %}</p>{% endif %}
     <ol>{% for l in o.lines %}<li>{{ l }}</li>{% endfor %}</ol>
   </div>{% endif %}
 </details>
@@ -109,7 +110,7 @@
 {% if peers and peers|length > 1 %}
 <h2 class="sub">{{ icon('council', 18) }}Same industry <span class="muted small">{{ (p.sheet.fundamentals or {}).industry or peers[0].industry }}</span></h2>
 <div class="tblwrap card"><table class="tbl peers">
-  <tr><th>Company</th><th>Market cap ₹ Cr</th><th>P/E</th><th>ROE %</th><th>Sales growth %</th><th>1-yr return %</th></tr>
+  <tr><th>Company</th><th>Market cap {{ M.cur }} {{ M.unit_label }}</th><th>P/E</th><th>ROE %</th><th>Sales growth %</th><th>1-yr return %</th></tr>
   {% for q in peers %}<tr class="{{ 'hl' if q.isin == p.isin }}"><td>{{ (q.name or q.symbol)|nice }}</td><td>{{ '{:,.0f}'.format(q.mcap) if q.mcap == q.mcap else '–' }}</td><td>{{ '%.1f'|format(q.pe) if q.pe == q.pe and q.pe is not none else '–' }}</td><td>{{ '%.1f'|format(q.roe) if q.roe is not none and q.roe == q.roe else '–' }}</td><td>{{ '%.1f'|format(q.sales_cagr_3y) if q.sales_cagr_3y is not none and q.sales_cagr_3y == q.sales_cagr_3y else '–' }}</td><td class="{{ 'neg' if q.ret_1y < 0 }}">{{ '%.1f'|format(q.ret_1y) if q.ret_1y == q.ret_1y else '–' }}</td></tr>{% endfor %}
 </table></div>
 {% endif %}

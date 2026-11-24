@@ -16,10 +16,13 @@ import numpy as np
 import pandas as pd
 
 from . import fundamentals
+from .config import IS_US, MARKET, PRIMARY_EXCH
+
+CUR, UNIT = MARKET["cur"], MARKET["unit_label"]
 from .store import cache_put, connect, ensure_schema
 
 log = logging.getLogger(__name__)
-MIN_TURNOVER = 1e6  # ₹10 lakh a day
+MIN_TURNOVER = 1e6  # ₹10 lakh (India) or $1M (US) traded a day, on average
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS universe (
@@ -31,7 +34,8 @@ CREATE TABLE IF NOT EXISTS universe (
 );
 """
 NEW_COLS = ["opm REAL", "npm REAL", "interest_cover REAL", "q_sales_yoy REAL", "q_profit_yoy REAL",
-            "div_yield REAL", "ev_ebitda REAL", "lender INTEGER"]
+            "div_yield REAL", "ev_ebitda REAL", "lender INTEGER",
+            "insiders REAL", "institutions REAL", "short_float REAL"]
 LENDER_WORDS = ("bank", "credit services", "mortgage", "insurance - ", "financial conglomerate")
 
 
@@ -43,7 +47,7 @@ def is_lender(sector, industry) -> bool:
 
 # key -> (label, group, unit, help). The order here is the order in the Screener's picker.
 METRICS = {
-    "price": ("Price", "Price & volume", "₹", "Last close"),
+    "price": ("Price", "Price & volume", CUR, "Last close"),
     "change_1d": ("Change today", "Price & volume", "%", "Price change on the last day"),
     "ret_1w": ("1-week return", "Price & volume", "%", ""),
     "ret_1m": ("1-month return", "Price & volume", "%", ""),
@@ -52,10 +56,10 @@ METRICS = {
     "vs_200dma": ("Vs 200-day average", "Price & volume", "%", "Above the 200-day average is positive"),
     "spike_x": ("Volume spike", "Price & volume", "×", "1-week average volume ÷ 1-year average"),
     "volume": ("Volume today", "Price & volume", "shares", "NSE + BSE"),
-    "turnover_cr": ("Traded today", "Price & volume", "₹ Cr", ""),
+    "turnover_cr": ("Traded today", "Price & volume", f"{CUR} {UNIT}", ""),
     "delivery": ("Delivery today", "Price & volume", "%", "Share of volume actually delivered"),
     "delivery_30d": ("Delivery, 30-day average", "Price & volume", "%", ""),
-    "mcap": ("Market cap", "Size & value", "₹ Cr", ""),
+    "mcap": ("Market cap", "Size & value", f"{CUR} {UNIT}", ""),
     "pe": ("P/E", "Size & value", "", "Market cap ÷ last 12 months' profit"),
     "pb": ("P/B", "Size & value", "", "Market cap ÷ book value"),
     "peg": ("PEG", "Size & value", "", "P/E ÷ 3-year profit growth"),
@@ -81,9 +85,18 @@ METRICS = {
     "dii": ("Indian funds (DII)", "Owners", "%", ""),
     "funds": ("All funds (FII + DII)", "Owners", "%", ""),
     "funds_chg": ("Funds change, 1 yr", "Owners", "pts", "FII + DII vs a year ago"),
-    "fcf": ("Free cash flow", "Cash", "₹ Cr", "Last year"),
+    "fcf": ("Free cash flow", "Cash", f"{CUR} {UNIT}", "Last year"),
     "fcf_neg_years": ("Years of negative free cash", "Cash", "of 3", ""),
 }
+
+if IS_US:   # US ownership: no promoter/pledge; insiders, institutions and short interest instead
+    for k in ("promoter", "promoter_chg", "pledge", "fii", "dii", "funds", "funds_chg"):
+        METRICS.pop(k, None)
+    METRICS.update({
+        "insiders": ("Insider holding", "Owners", "%", "Officers, directors, 10% owners"),
+        "institutions": ("Institutional holding", "Owners", "%", "Funds and other institutions"),
+        "short_float": ("Short interest", "Owners", "% float", "Shares sold short, % of float"),
+    })
 
 PRESETS = [
     {"id": "volume-shock", "name": "Volume shock", "desc": "Dad's screen",
@@ -97,6 +110,20 @@ PRESETS = [
     {"id": "cash", "name": "Cash machines", "desc": "Profit that turns into cash",
      "rules": [["cfo_conv", ">", 90], ["fcf_neg_years", "<", 1], ["de", "<", 0.5], ["roe", ">", 15]]},
 ]
+
+if IS_US:   # Dad's rules sized for the US ($ millions), plus US-flavoured ideas
+    PRESETS = [
+        {"id": "volume-shock", "name": "Volume shock", "desc": "Dad's rules, US-sized",
+         "rules": [["spike_x", ">", 6], ["turnover_cr", ">", 1], ["mcap", ">", 300], ["pe", "<", 40], ["roe", ">", 12], ["de", "<", 1]]},
+        {"id": "quality", "name": "Quality at a fair price", "desc": "High returns, low debt, not expensive",
+         "rules": [["roe", ">", 15], ["roce", ">", 15], ["de", "<", 0.5], ["pe", "<", 30], ["mcap", ">", 1000]]},
+        {"id": "growers", "name": "Fast growers", "desc": "Sales and profit up 20%+ a year",
+         "rules": [["sales_cagr_3y", ">", 20], ["profit_cagr_3y", ">", 20], ["roe", ">", 12], ["mcap", ">", 300]]},
+        {"id": "breakout", "name": "Near the high, with volume", "desc": "Within 5% of 52-week high on 2× volume",
+         "rules": [["from_high", ">", -5], ["spike_x", ">", 2], ["mcap", ">", 300]]},
+        {"id": "squeeze", "name": "Short squeeze watch", "desc": "Heavily shorted, volume surging",
+         "rules": [["short_float", ">", 15], ["spike_x", ">", 2], ["mcap", ">", 300]]},
+    ]
 
 _db_lock = threading.Lock()
 
@@ -116,6 +143,21 @@ def db():
 
 
 def candidates(conn) -> pd.DataFrame:
+    if IS_US:
+        return _candidates_us(conn)
+    return _candidates_in(conn)
+
+
+def _candidates_us(conn) -> pd.DataFrame:
+    dates = [r[0] for r in conn.execute(
+        "SELECT DISTINCT date FROM daily WHERE exch='US' ORDER BY date DESC LIMIT 20")]
+    q = f"""SELECT d.isin, SUM(d.turnover)/{len(dates)}.0 AS avg_t, s.ticker AS symbol, s.cik AS bse_code,
+              s.yahoo, s.name FROM daily d JOIN us_symbols s ON s.ticker = d.isin
+            WHERE d.date IN ({",".join("?" * len(dates))}) GROUP BY d.isin HAVING avg_t >= ?"""
+    return pd.read_sql_query(q, conn, params=(*dates, MIN_TURNOVER))
+
+
+def _candidates_in(conn) -> pd.DataFrame:
     dates = [r[0] for r in conn.execute(
         "SELECT DISTINCT date FROM daily WHERE exch='NSE' ORDER BY date DESC LIMIT 20")]
     q = f"""SELECT isin, SUM(turnover)/{len(dates)}.0 AS avg_t,
@@ -133,7 +175,7 @@ def candidates(conn) -> pd.DataFrame:
 COLS = ["isin", "symbol", "bse_code", "yahoo", "name", "sector", "industry", "shares_cr", "ttm_profit", "ttm_sales",
         "equity", "roe", "roe_3y", "roce", "roa", "de", "sales_cagr_3y", "profit_cagr_3y", "cfo_conv", "fcf",
         "fcf_neg_years", "asset_turnover", "updated", "error", "opm", "npm", "interest_cover", "q_sales_yoy",
-        "q_profit_yoy", "div_yield", "ev_ebitda", "lender"]
+        "q_profit_yoy", "div_yield", "ev_ebitda", "lender", "insiders", "institutions", "short_float"]
 
 
 def _row(c: pd.Series, f: dict | None, err: str | None) -> tuple:
@@ -147,7 +189,8 @@ def _row(c: pd.Series, f: dict | None, err: str | None) -> tuple:
             g("sales_cagr_3y_pct"), g("profit_cagr_3y_pct"), a0.get("cfo_to_profit_plus_dep_pct"),
             a0.get("free_cash_flow"), neg if f else None, g("asset_turnover"), date.today().isoformat(), err,
             g("opm_pct"), g("npm_pct"), g("interest_cover"), g("q_sales_yoy_pct"), g("q_profit_yoy_pct"),
-            g("div_yield_pct"), g("ev_ebitda"), int(is_lender(g("sector"), g("industry"))) if f else None)
+            g("div_yield_pct"), g("ev_ebitda"), int(is_lender(g("sector"), g("industry"))) if f else None,
+            g("insiders_pct"), g("institutions_pct"), g("short_pct_float"))
 
 
 def refresh(limit: int | None = None, max_age_days: int = 7, force: list[str] | None = None,
@@ -221,11 +264,12 @@ def price_metrics(conn) -> tuple[str, pd.DataFrame]:
 
 
 def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
-    dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM daily WHERE exch='NSE' ORDER BY date DESC LIMIT 252")]
+    dates = [r[0] for r in conn.execute(
+        "SELECT DISTINCT date FROM daily WHERE exch=? ORDER BY date DESC LIMIT 252", (PRIMARY_EXCH,))]
     df = pd.read_sql_query(
         "SELECT date, isin, SUM(volume) vol, SUM(turnover) t, SUM(deliv_qty) dq, "
-        "COALESCE(MAX(CASE WHEN exch='NSE' THEN close END), MAX(close)) close, "
-        "COALESCE(MAX(CASE WHEN exch='NSE' THEN prev_close END), MAX(prev_close)) prev "
+        f"COALESCE(MAX(CASE WHEN exch='{PRIMARY_EXCH}' THEN close END), MAX(close)) close, "
+        f"COALESCE(MAX(CASE WHEN exch='{PRIMARY_EXCH}' THEN prev_close END), MAX(prev_close)) prev "
         f"FROM daily WHERE date >= ? GROUP BY date, isin", conn, params=(dates[-1],))
     from .actions import adjust
     df = adjust(df, conn, price_cols=("close", "prev"), volume_cols=("vol", "dq"))
@@ -246,7 +290,7 @@ def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
         "from_high": (close.iloc[-1] / close.max() - 1) * 100,
         "vs_200dma": (close.iloc[-1] / close.tail(200).mean() - 1) * 100,
         "spike_x": vol.tail(5).mean() / vol.mean(),
-        "volume": last["vol"], "turnover_cr": last["t"] / 1e7,
+        "volume": last["vol"], "turnover_cr": last["t"] / MARKET["unit"],
         "delivery": last["dq"] / last["vol"] * 100,
         "delivery_30d": (dq.tail(30).sum() / vol.tail(30).where(dq.tail(30).notna()).sum()) * 100,
     })
@@ -256,9 +300,12 @@ def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
 
 def table(conn) -> tuple[str, pd.DataFrame]:
     """Every universe company with fundamentals and today's price metrics, as one frame."""
+    db()   # make sure the table (and newer columns) exist, e.g. on a brand-new market database
     today, pm = price_metrics(conn)
     u = pd.read_sql_query("SELECT * FROM universe WHERE error IS NULL", conn).set_index("isin")
     df = u.join(pm, how="inner")
+    if IS_US:
+        return today, df
     try:
         from .ownership import db as _odb
         _odb()

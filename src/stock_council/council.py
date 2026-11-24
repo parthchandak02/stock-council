@@ -42,20 +42,31 @@ DEFAULT_PROMPT = """Answer in max 12 lines, pointwise and short, and analyze tho
 8. Final Score: Give a final result in the form of marks out of 10.
 9. Actionable Recommendation: Suggest Buy / Sell / Hold / Stepwise Buy / Stepwise Sell with risk parameters."""
 
-SYSTEM = """You are one member of an investment council analysing an Indian listed company for a long-time private investor.
+from .config import IS_US
+
+if IS_US:
+    DEFAULT_PROMPT = DEFAULT_PROMPT.replace(
+        "3. Shareholding & Governance: Promoter, FII, DII, and retail stake direction (up/down) with explicit check on promoter pledged shares percentage.",
+        "3. Ownership & Governance: insider and institutional ownership, insider buying or selling in the last 90 days (SEC Form 4), short interest, and any red flags in recent 8-K filings.")
+
+SYSTEM = """You are one member of an investment council analysing a {where} listed company for a long-time private investor.
 You receive a FACT SHEET computed from official NSE/BSE data and company filings, and a NEWS DIGEST.
 Rules:
 - Treat every number in the fact sheet as correct. Do not replace it with figures from memory. If you need a number that is not there, say "not in data".
 - Use your own knowledge only for business outlook, industry position, moat and technology impact.
-- Be decisive and specific. Indian context, ₹ and crore.
+- Be decisive and specific. {context}
 Return ONLY a JSON object, no other text:
 {"verdict": one of "Buy" | "Stepwise Buy" | "Hold" | "Stepwise Sell" | "Sell",
  "score": number from 0 to 10 (one decimal),
- "stop_loss": price in ₹ or null,
+ "stop_loss": price in {cur} or null,
  "entry_zone": short text or null,
  "lines": [up to 12 short strings, one per point, following the investor's criteria],
  "key_risk": one short sentence,
  "trigger_to_change_view": one short sentence}"""
+
+SYSTEM = SYSTEM.replace("a {where}", "a US" if IS_US else "an Indian").replace(
+    "{context}", "US market context, $ and $ millions; SEC filings." if IS_US else "Indian context, ₹ and crore.").replace(
+    "{cur}", "$" if IS_US else "₹")
 
 VOTE_GROUP = {"buy": "BUY", "stepwise buy": "BUY", "hold": "HOLD", "stepwise sell": "SELL", "sell": "SELL"}
 
@@ -98,7 +109,8 @@ def _chat(model: str, messages: list[dict], *, json_mode=False, plugins=None, ma
 
 
 def news_digest(name: str, symbol: str) -> dict:
-    prompt = (f"Find the most important news from the last 6 months about {name} (NSE: {symbol}), an Indian listed company: "
+    where = f"(ticker {symbol}), a US listed company" if IS_US else f"(NSE: {symbol}), an Indian listed company"
+    prompt = (f"Find the most important news from the last 6 months about {name} {where}: "
               "quarterly results, order wins, capacity expansion, management commentary, fund raising, promoter actions, "
               "regulatory issues, and any reason for unusual trading volume in the last week. "
               "Reply with up to 10 dated bullet points, newest first, each with its source site. Facts only, no opinion.")

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from . import fundamentals
-from .config import DEFAULT_FILTERS, WEEK_DAYS, YEAR_DAYS
+from .config import DEFAULT_FILTERS, IS_US, PRIMARY_EXCH, WEEK_DAYS, YEAR_DAYS
 from .store import cache_get, cache_put, connect
 
 log = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class ScreenResult:
 
 def trading_dates(conn, n: int) -> list[str]:
     rows = conn.execute(
-        "SELECT DISTINCT date FROM daily WHERE exch='NSE' ORDER BY date DESC LIMIT ?", (n,)
+        "SELECT DISTINCT date FROM daily WHERE exch=? ORDER BY date DESC LIMIT ?", (PRIMARY_EXCH, n)
     ).fetchall()
     return [r["date"] for r in rows]
 
@@ -41,7 +41,7 @@ def volume_spikes(conn, filters: dict) -> tuple[str, pd.DataFrame]:
         raise RuntimeError(f"only {len(dates)} trading days stored; run `stock-council update` first")
     today, week = dates[0], set(dates[:WEEK_DAYS])
     df = pd.read_sql_query(
-        "SELECT date, isin, SUM(volume) AS vol FROM daily WHERE date >= ? GROUP BY date, isin",
+        "SELECT date, isin, SUM(volume) AS vol, SUM(turnover) AS t FROM daily WHERE date >= ? GROUP BY date, isin",
         conn, params=(dates[-1],),
     )
     from .actions import adjust
@@ -52,9 +52,12 @@ def volume_spikes(conn, filters: dict) -> tuple[str, pd.DataFrame]:
         "days": g["vol"].size(),
         "vol_1w_avg": df[df["date"].isin(week)].groupby("isin")["vol"].mean(),
         "vol_today": df[df["date"] == today].set_index("isin")["vol"],
+        "turnover_today": df[df["date"] == today].groupby("isin")["t"].sum(),
     }).dropna(subset=["vol_today", "vol_1w_avg"])
+    # India: "Volume > 10,000" is shares (Screener's rule). US: dollars traded today.
+    traded = stats["turnover_today"].fillna(0) if IS_US else stats["vol_today"]
     stats["spike_x"] = stats["vol_1w_avg"] / stats["vol_1y_avg"]
-    hits = stats[(stats["vol_today"] > filters["min_volume"])
+    hits = stats[(traded > filters["min_volume"])
                  & (stats["vol_1w_avg"] > filters["volume_spike_multiple"] * stats["vol_1y_avg"])
                  & (stats["days"] >= 20)]
     return today, hits.sort_values("spike_x", ascending=False), len(stats)
@@ -64,7 +67,7 @@ def identity(conn, isin: str, day: str) -> dict:
     rows = conn.execute(
         "SELECT * FROM daily WHERE isin=? AND date=? ORDER BY exch DESC", (isin, day)
     ).fetchall()  # NSE first
-    nse = next((r for r in rows if r["exch"] == "NSE"), None)
+    nse = next((r for r in rows if r["exch"] == PRIMARY_EXCH), None)
     bse = next((r for r in rows if r["exch"] == "BSE"), None)
     main = nse or bse
     vol = sum(r["volume"] or 0 for r in rows)
@@ -79,15 +82,23 @@ def identity(conn, isin: str, day: str) -> dict:
         "change_pct": round((main["close"] / main["prev_close"] - 1) * 100, 2) if main["prev_close"] else None,
         "volume": vol,
         "delivery_pct": round(sum(deliv) / vol * 100, 1) if deliv and vol else None,
-        "yahoo_symbol": f"{nse['symbol']}.NS" if nse else f"{bse['symbol']}.BO",
+        "yahoo_symbol": _yahoo(conn, nse, bse),
+        "cik": main["code"] if IS_US else None,   # SEC company id (US rows keep it in `code`)
     }
+
+
+def _yahoo(conn, nse, bse) -> str:
+    if IS_US:
+        row = conn.execute("SELECT yahoo FROM us_symbols WHERE ticker=?", (nse["symbol"],)).fetchone()
+        return row["yahoo"] if row else nse["symbol"].replace(".", "-")
+    return f"{nse['symbol']}.NS" if nse else f"{bse['symbol']}.BO"
 
 
 def get_fundamentals(conn, ident: dict) -> dict:
     key = f"fund:{ident['yahoo_symbol']}"
     cached = cache_get(conn, key, max_age_days=6)
     if cached is None:
-        cached = fundamentals.fetch(ident["yahoo_symbol"])
+        cached = fundamentals.fetch(ident["yahoo_symbol"], with_sector=IS_US)
         cache_put(conn, key, cached)
     # re-price with today's exchange close so market cap and P/E are current
     f = dict(cached)

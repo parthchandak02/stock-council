@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_ui.html" import icon, verdict %}
 {% block title %}Track record · Stock Council{% endblock %}
 {% block main %}
-<a class="back" href="/history">{{ icon('back', 16) }}History</a>
+<a class="back" href="{{ B }}/history">{{ icon('back', 16) }}History</a>
 <section class="head"><div><p class="eyebrow">Track record</p><h1>How the calls did</h1></div></section>
 <p class="muted lead">Price change from the day of each call to the latest close, adjusted for splits.{% if max_days < 5 %} It's early: the oldest call is {{ max_days }} day{{ 's' if max_days != 1 }} old, so give it a few weeks.{% endif %}</p>
 
@@ -22,8 +22,8 @@
 <h2 class="sub">{{ icon('history', 18) }}Every call</h2>
 <ul class="stocks">
 {% for r in rows %}
-<li><a class="row" href="/stock/{{ r.run_id }}/{{ r.isin }}">
-  <span class="who"><b>{{ (r.name or r.symbol)|nice }}</b><span class="muted">{{ r.day|day }} · ₹{{ '%.2f'|format(r.call_price) }} → ₹{{ '%.2f'|format(r.now) if r.now else '–' }}</span></span>
+<li><a class="row" href="{{ B }}/stock/{{ r.run_id }}/{{ r.isin }}">
+  <span class="who"><b>{{ (r.name or r.symbol)|nice }}</b><span class="muted">{{ r.day|day }} · {{ M.cur }}{{ '%.2f'|format(r.call_price) }} → {{ M.cur }}{{ '%.2f'|format(r.now) if r.now else '–' }}</span></span>
   <span class="vote">{{ verdict({'call': r.call}) }}</span>
   <span class="score"><b class="{{ 'pos' if r.ret > 0 else 'neg' if r.ret < 0 }}">{{ '%+.1f'|format(r.ret) if r.ret == r.ret else '–' }}%</b></span>
   {{ icon('chev', 18, 'chev') }}

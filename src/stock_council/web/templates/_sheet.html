@@ -5,7 +5,7 @@
 {% macro fy(d) %}FY{{ (d or '')[2:4] }}{% endmacro %}
 
 <section class="fs">
-  <h3>Cash flow <span class="muted small">₹ Cr</span></h3>
+  <h3>Cash flow <span class="muted small">{{ M.cur }} {{ M.unit_label }}</span></h3>
   <div class="tblwrap"><table class="tbl">
     <tr><th></th>{% for a in yrs %}<th>{{ fy(a.fy_end) }}</th>{% endfor %}</tr>
     <tr><td>Sales</td>{% for a in yrs %}<td>{{ n(a.sales) }}</td>{% endfor %}</tr>
@@ -46,26 +46,43 @@
 </section>
 {% endif %}
 
+{% if IS_US %}
 <section class="fs">
-  <h3>Price &amp; volume <span class="muted small">NSE + BSE combined</span></h3>
+  <h3>Ownership &amp; insiders <span class="muted small">SEC filings</span></h3>
+  {% set o = s.owners_us or {} %}{% set ins = s.insiders or {} %}
   <dl class="kv">
-    <div><dt>52-week range</dt><dd>₹{{ t.low_52w }} – ₹{{ t.high_52w }}</dd></div>
+    <div><dt>Insiders own</dt><dd>{{ n(o.insiders_pct, '%') }}</dd></div>
+    <div><dt>Institutions own</dt><dd>{{ n(o.institutions_pct, '%') }}</dd></div>
+    <div><dt>Short interest</dt><dd>{{ n(o.short_pct_float, '%') }} <span class="muted">of float</span></dd></div>
+    <div><dt>Insider buys / sells, 90 days</dt><dd>${{ '{:,.0f}'.format(ins.buys_usd or 0) }} / ${{ '{:,.0f}'.format(ins.sells_usd or 0) }}</dd></div>
+  </dl>
+  {% if ins.trades %}<div class="tblwrap"><table class="tbl">
+    <tr><th>Date</th><th>Insider</th><th>Role</th><th>Type</th><th>Shares</th><th>Price</th></tr>
+    {% for x in ins.trades %}<tr><td>{{ x.date }}</td><td>{{ x.who }}</td><td>{{ x.role or '–' }}</td><td class="{{ 'neg' if x.type == 'Sell' }}">{{ x.type }}</td><td>{{ '{:,}'.format(x.shares) }}</td><td>${{ x.price }}</td></tr>{% endfor %}
+  </table></div>{% else %}<p class="muted small">No open-market insider buying or selling in the last 90 days.</p>{% endif %}
+</section>
+{% endif %}
+
+<section class="fs">
+  <h3>Price &amp; volume <span class="muted small">{{ 'all US exchanges' if IS_US else 'NSE + BSE combined' }}</span></h3>
+  <dl class="kv">
+    <div><dt>52-week range</dt><dd>{{ M.cur }}{{ t.low_52w }} – {{ M.cur }}{{ t.high_52w }}</dd></div>
     <div><dt>From 52-week high</dt><dd>{{ n(t.pct_from_52w_high, '%') }}</dd></div>
     <div><dt>1 month / 1 year</dt><dd>{{ n(t.return_1m_pct, '%') }} / {{ n(t.return_1y_pct, '%') }}</dd></div>
-    <div><dt>50 / 200-day average</dt><dd>₹{{ t.sma_50 }} / ₹{{ t.sma_200 }}</dd></div>
+    <div><dt>50 / 200-day average</dt><dd>{{ M.cur }}{{ t.sma_50 }} / {{ M.cur }}{{ t.sma_200 }}</dd></div>
     <div><dt>RSI (14)</dt><dd>{{ t.rsi_14 }}</dd></div>
     <div><dt>Volume: week vs year</dt><dd>{{ n(t.volume_1w_avg) }} vs {{ n(t.volume_1y_avg) }}</dd></div>
-    <div><dt>Delivery today / 30-day</dt><dd>{{ n(t.delivery_pct_today, '%') }} / {{ n(t.delivery_pct_30d_avg, '%') }}</dd></div>
+    {% if not IS_US %}<div><dt>Delivery today / 30-day</dt><dd>{{ n(t.delivery_pct_today, '%') }} / {{ n(t.delivery_pct_30d_avg, '%') }}</dd></div>{% endif %}
     <div><dt>Range before the spike</dt><dd>{{ n(t.range_60d_before_spike_pct, '%') }} <span class="muted">in 60 days</span></dd></div>
   </dl>
   <div class="tblwrap"><table class="tbl">
-    <tr><th>Day</th><th>Close</th><th>Volume</th><th>Delivered</th></tr>
-    {% for d in (t.last_10_sessions or [])|reverse %}<tr class="{{ 'hl' if d.volume > 3 * (t.volume_1y_avg or 1) }}"><td>{{ d.date|day }}</td><td>₹{{ d.close }}</td><td>{{ n(d.volume) }}</td><td>{{ n(d.delivery_pct, '%') }}</td></tr>{% endfor %}
+    <tr><th>Day</th><th>Close</th><th>Volume</th>{% if not IS_US %}<th>Delivered</th>{% endif %}</tr>
+    {% for d in (t.last_10_sessions or [])|reverse %}<tr class="{{ 'hl' if d.volume > 3 * (t.volume_1y_avg or 1) }}"><td>{{ d.date|day }}</td><td>{{ M.cur }}{{ d.close }}</td><td>{{ n(d.volume) }}</td>{% if not IS_US %}<td>{{ n(d.delivery_pct, '%') }}</td>{% endif %}</tr>{% endfor %}
   </table></div>
 </section>
 
 <section class="fs">
-  <h3>Quarterly results <span class="muted small">₹ Cr</span></h3>
+  <h3>Quarterly results <span class="muted small">{{ M.cur }} {{ M.unit_label }}</span></h3>
   <div class="tblwrap"><table class="tbl">
     <tr><th></th>{% for q in f.quarters or [] %}<th>{{ q.quarter_end[5:7]|int }}/{{ q.quarter_end[2:4] }}</th>{% endfor %}</tr>
     <tr><td>Sales</td>{% for q in f.quarters or [] %}<td>{{ n(q.sales) }}</td>{% endfor %}</tr>
@@ -77,7 +94,7 @@
 <section class="fs">
   <h3>Valuation &amp; efficiency</h3>
   <dl class="kv">
-    <div><dt>Market cap</dt><dd>₹{{ n(f.market_cap_cr) }} Cr</dd></div>
+    <div><dt>Market cap</dt><dd>{{ M.cur }}{{ n(f.market_cap_cr) }} {{ M.unit_label }}</dd></div>
     <div><dt>P/E (trailing)</dt><dd>{{ n(f.pe) }}</dd></div>
     <div><dt>P/B</dt><dd>{{ n(f.pb) }}</dd></div>
     <div><dt>PEG</dt><dd>{{ n(f.peg) }}</dd></div>
@@ -85,14 +102,14 @@
     <div><dt>ROCE</dt><dd>{{ n(f.roce_pct, '%') }}</dd></div>
     <div><dt>ROA</dt><dd>{{ n(f.roa_pct, '%') }}</dd></div>
     <div><dt>Asset turnover</dt><dd>{{ n(f.asset_turnover) }}×</dd></div>
-    <div><dt>Sales (12 months)</dt><dd>₹{{ n(f.ttm_sales) }} Cr</dd></div>
-    <div><dt>Profit (12 months)</dt><dd>₹{{ n(f.ttm_net_profit) }} Cr</dd></div>
+    <div><dt>Sales (12 months)</dt><dd>{{ M.cur }}{{ n(f.ttm_sales) }} {{ M.unit_label }}</dd></div>
+    <div><dt>Profit (12 months)</dt><dd>{{ M.cur }}{{ n(f.ttm_net_profit) }} {{ M.unit_label }}</dd></div>
   </dl>
 </section>
 
 {% if s.announcements %}
 <section class="fs">
-  <h3>Announcements to NSE <span class="muted small">last 30 days</span></h3>
+  <h3>{{ 'SEC filings (8-K)' if IS_US else 'Announcements to NSE' }} <span class="muted small">last 30 days</span></h3>
   <ul class="anns">{% for a in s.announcements %}
     <li><span class="muted small">{{ a.at|day }}</span><b>{{ a.subject }}</b><span>{{ a.text[:220] }}</span>{% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">Filing</a>{% endif %}</li>
   {% endfor %}</ul>

@@ -4,14 +4,14 @@
 <section class="intro">
   <p class="eyebrow">How it works</p>
   <h1>Unusual trading, checked by facts, judged by {{ st.models|length }} AIs.</h1>
-  <p class="lead muted">Every weekday evening it looks at every company on NSE and BSE and keeps the few worth a closer look.</p>
+  <p class="lead muted">Every weekday evening it looks at every company on {{ M.exchanges }} and keeps the few worth a closer look.</p>
 </section>
 
 <ol class="how">
-  <li class="card"><span class="hn">1</span>{{ icon('download', 28, '', 'd') }}<h3>Collect</h3><p>The day's closing price, volume and delivery for ~5,000 companies, straight from NSE and BSE.</p></li>
+  <li class="card"><span class="hn">1</span>{{ icon('download', 28, '', 'd') }}<h3>Collect</h3><p>{% if IS_US %}The day's closing price and volume for ~5,900 US companies, plus SEC filings.{% else %}The day's closing price, volume and delivery for ~5,000 companies, straight from NSE and BSE.{% endif %}</p></li>
   <li class="card"><span class="hn">2</span>{{ icon('volume', 28, '', 'd') }}<h3>Spot the shock</h3><p>Keep stocks trading over <b>{{ st.filters.volume_spike_multiple|round(1) }}×</b> their usual volume this week. Big money often shows up as volume first.</p></li>
   <li class="card"><span class="hn">3</span>{{ icon('scale', 28, '', 'd') }}<h3>Check the business</h3><p>Drop anything small, loss-making, expensive or in debt:</p>
-    <p class="filters"><span class="tag">Market cap &gt; ₹{{ st.filters.min_market_cap_cr|int }} Cr</span><span class="tag">P/E &lt; {{ st.filters.max_pe|int }}</span><span class="tag">ROE &gt; {{ st.filters.min_roe_pct|int }}%</span><span class="tag">Debt/equity &lt; {{ st.filters.max_debt_to_equity }}</span></p></li>
+    <p class="filters"><span class="tag">Market cap &gt; {{ M.cur }}{{ st.filters.min_market_cap_cr|int }} {{ M.unit_label }}</span><span class="tag">P/E &lt; {{ st.filters.max_pe|int }}</span><span class="tag">ROE &gt; {{ st.filters.min_roe_pct|int }}%</span><span class="tag">Debt/equity &lt; {{ st.filters.max_debt_to_equity }}</span></p></li>
   <li class="card"><span class="hn">4</span>{{ icon('council', 28, '', 'd') }}<h3>Ask the council</h3><p>Each survivor gets a fact sheet and a news search. All AIs read the same facts and vote <b>Buy, Hold or Sell</b> with a score out of 10.</p></li>
 </ol>
 
@@ -32,9 +32,9 @@
 </ul>
 
 <div class="card when">
-  <p>{{ icon('clock', 18) }}<span>Runs <b>weekdays at 8:15 pm</b> India time, once the exchange files are out.</span></p>
-  <p>{{ icon('mail', 18) }}<span>A short summary goes out by email.</span></p>
+  <p>{{ icon('clock', 18) }}<span>Runs <b>{{ 'weekdays' if st.schedule.days == [0,1,2,3,4] else 'on chosen days' }} at {{ st.schedule.time }}</b> {{ 'New York' if IS_US else 'India' }} time, after the market closes.</span></p>
+  {% if st.whatsapp.enabled %}<p>{{ icon('council', 18) }}<span>A short list goes to WhatsApp.</span></p>{% endif %}
   <p>{{ icon('search', 18) }}<span>Any stock can be checked any time from the Today page.</span></p>
 </div>
-{% if run %}<p class="center"><a class="btn" href="/run/{{ run.id }}">{{ icon('target', 16) }}See the latest run step by step</a></p>{% endif %}
+{% if run %}<p class="center"><a class="btn" href="{{ B }}/run/{{ run.id }}">{{ icon('target', 16) }}See the latest run step by step</a></p>{% endif %}
 {% endblock %}

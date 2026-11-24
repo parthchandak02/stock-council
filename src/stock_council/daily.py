@@ -13,7 +13,8 @@ import threading
 from datetime import datetime, timezone
 
 from . import council
-from .exchanges import update
+from .config import IS_US
+from .exchanges import update as _update_in
 from .factsheet import build, render_markdown
 from .nse_api import NSE
 from .screen import ScreenResult, run_screen, trading_dates
@@ -66,8 +67,9 @@ def _now() -> str:
 
 
 def ist_today() -> str:
-    from .exchanges import ist_today as d
-    return d().isoformat()
+    """Today in this market's own time zone (India or New York), as YYYY-MM-DD."""
+    from .config import market_today
+    return market_today().isoformat()
 
 
 class NothingToDo(Exception):
@@ -152,12 +154,17 @@ def run_screen_job(kind: str = "daily", max_stocks: int = 20, require_today: boo
     if run_id is None:
         run_id = _start(conn, ist_today(), kind, st, "download")
     try:
-        update(history_days=10)
+        if IS_US:
+            from .us_data import update as _update_us
+            _update_us(history_days=10)
+        else:
+            _update_in(history_days=10)
         latest = trading_dates(conn, 1)[0]
         if require_today and latest != ist_today():
             raise NothingToDo(f"no exchange data for {ist_today()} yet (latest {latest})")
-        from .upkeep import before_screen
-        before_screen()
+        if not IS_US:   # NSE splits, announcements, results-day refresh (US: per stock, in its fact sheet)
+            from .upkeep import before_screen
+            before_screen()
         if kind == "daily" and conn.execute(
                 "SELECT 1 FROM runs WHERE kind='daily' AND day=? AND status='done' AND id!=?", (latest, run_id)).fetchone():
             raise NothingToDo(f"daily run for {latest} already done")

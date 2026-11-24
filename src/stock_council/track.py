@@ -6,6 +6,7 @@ import json
 import pandas as pd
 
 from .actions import adjust, aliases
+from .config import PRIMARY_EXCH as PX
 from .council import VOTE_GROUP
 
 
@@ -14,7 +15,7 @@ def latest_closes(conn, isins: list[str]) -> dict[str, tuple[str, float]]:
     for i in set(isins):
         ids = aliases(conn, i)
         df = pd.read_sql_query(
-            f"SELECT date, isin, COALESCE(MAX(CASE WHEN exch='NSE' THEN close END), MAX(close)) close FROM daily "
+            f"SELECT date, isin, COALESCE(MAX(CASE WHEN exch='{PX}' THEN close END), MAX(close)) close FROM daily "
             f"WHERE isin IN ({','.join('?' * len(ids))}) AND date >= date((SELECT max(date) FROM daily), '-10 days') "
             "GROUP BY date ORDER BY date", conn, params=ids)
         if not df.empty:

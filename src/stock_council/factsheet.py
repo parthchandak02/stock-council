@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .config import IS_US, MARKET, PRIMARY_EXCH
+
+C, U = MARKET["cur"], MARKET["unit_label"]   # ₹ / Cr (India) or $ / M (US)
 from .nse_api import NSE
 from .screen import get_fundamentals, identity, trading_dates
 from .store import cache_get, cache_put, connect
@@ -14,7 +17,7 @@ from .store import cache_get, cache_put, connect
 
 def _isin_for(conn, symbol: str) -> str:
     row = conn.execute(
-        "SELECT isin FROM daily WHERE (symbol=? AND exch='NSE') OR code=? OR (symbol=? AND exch='BSE') "
+        f"SELECT isin FROM daily WHERE (symbol=? AND exch='{PRIMARY_EXCH}') OR code=? OR (symbol=? AND exch='BSE') "
         "ORDER BY date DESC LIMIT 1", (symbol, symbol, symbol)).fetchone()
     if not row:
         raise LookupError(f"{symbol} not found in NSE/BSE data")
@@ -26,7 +29,7 @@ def technicals(conn, isin: str) -> dict:
     ids = aliases(conn, isin)  # one history across an ISIN change (splits)
     df = pd.read_sql_query(
         "SELECT date, SUM(volume) vol, SUM(deliv_qty) deliv, "
-        "MAX(CASE WHEN exch='NSE' THEN close END) nse_close, MAX(CASE WHEN exch='BSE' THEN close END) bse_close "
+        f"MAX(CASE WHEN exch='{PRIMARY_EXCH}' THEN close END) nse_close, MAX(CASE WHEN exch='BSE' THEN close END) bse_close "
         f"FROM daily WHERE isin IN ({','.join('?' * len(ids))}) GROUP BY date ORDER BY date", conn, params=ids)
     from .actions import adjust
     df["isin"] = isin
@@ -76,7 +79,10 @@ def build(symbol: str, nse: NSE | None = None) -> dict:
     sheet = {"as_of": day, **ident, "technicals": tech,
              "spike_x": round(tech["volume_1w_avg"] / max(tech["volume_1y_avg"], 1), 1)}
     sheet["fundamentals"] = get_fundamentals(conn, ident)
-    if ident["nse_symbol"]:
+    if IS_US:
+        from .us_extras import extras
+        sheet.update(extras(conn, ident, sheet["fundamentals"]))
+    elif ident["nse_symbol"]:
         key = f"nse:{ident['nse_symbol']}"
         disc = cache_get(conn, key, max_age_days=2)
         if disc is None:
@@ -100,11 +106,44 @@ def _fmt(x, suffix=""):
     return "n/a" if x is None else f"{x:,}{suffix}" if isinstance(x, int) else f"{x}{suffix}"
 
 
+def _in_owners(s: dict) -> list[str]:
+    L = ["", "## 3. Shareholding & governance (% of total shares, NSE filings)"]
+    if s.get("shareholding"):
+        L += ["| Quarter | Promoter | FII | DII | of which MFs | Public (non-institutional) | Small retail (<₹2L) |",
+              "|---|---|---|---|---|---|---|"]
+        for q in s["shareholding"]:
+            L.append(f"| {q['quarter']} | {_fmt(q.get('promoter'))} | {_fmt(q.get('fii'))} | {_fmt(q.get('dii'))} | "
+                     f"{_fmt(q.get('mutual_funds'))} | {_fmt(q.get('public_non_institutions'))} | {_fmt(q.get('retail_small'))} |")
+    else:
+        L.append("Shareholding not available (BSE-only company).")
+    p = s.get("pledge")
+    L.append(f"Promoter pledge: {_fmt(p['pledged_pct_of_promoter_shares'], '%')} of promoter shares = "
+             f"{_fmt(p['pledged_pct_of_total_shares'], '%')} of total shares (as of {p['as_of']})"
+             if p else "Promoter pledge: none disclosed on NSE.")
+    return L
+
+
+def _us_owners(s: dict) -> list[str]:
+    o = s.get("owners_us") or {}
+    ins = s.get("insiders") or {}
+    L = ["", "## 3. Ownership & insiders (US; there is no promoter pledge here)",
+         f"- Insiders own {_fmt(o.get('insiders_pct'), '%')}; institutions own {_fmt(o.get('institutions_pct'), '%')}",
+         f"- Short interest {_fmt(o.get('short_pct_float'), '%')} of float, {_fmt(o.get('short_ratio_days'))} days to cover"]
+    if ins:
+        L.append(f"- Insider open-market trades, last {ins['days']} days (SEC Form 4): buys ${ins['buys_usd']:,} by "
+                 f"{ins['buyers']}, sells ${ins['sells_usd']:,} by {ins['sellers']} → net ${ins['net_usd']:,}")
+        if ins.get("trades"):
+            L += ["", "| Date | Insider | Role | Type | Shares | Price |", "|---|---|---|---|---|---|"]
+            L += [f"| {x['date']} | {x['who']} | {x['role']} | {x['type']} | {x['shares']:,} | ${x['price']} |"
+                  for x in ins["trades"]]
+    return L
+
+
 def render_markdown(s: dict) -> str:
     f, t = s["fundamentals"], s["technicals"]
     L = [f"# {s['name']} ({s['nse_symbol'] or s['bse_symbol']}) — fact sheet as of {s['as_of']}",
-         f"Price ₹{t['close']} ({_fmt(s['change_pct'], '%')} today) · Market cap ₹{_fmt(f.get('market_cap_cr'))} Cr",
-         "", "## 1. Cash-flow quality (₹ Cr, financial years)",
+         f"Price {C}{t['close']} ({_fmt(s['change_pct'], '%')} today) · Market cap {C}{_fmt(f.get('market_cap_cr'))} {U}",
+         "", f"## 1. Cash-flow quality ({C} {U}, financial years)",
          "| FY end | Sales | Net profit | Depreciation | Operating CF | CFO/(NP+Dep) | Capex | Free CF |",
          "|---|---|---|---|---|---|---|---|"]
     for a in f["annual"][:4]:
@@ -119,28 +158,20 @@ def render_markdown(s: dict) -> str:
                  f"{_fmt(a['payable_days'])} | {_fmt(a.get('cash_conversion_cycle_days'))} | "
                  f"{_fmt(a['working_capital_days'])} | {_fmt(a['debt_to_equity'])} |")
     L.append(f"Latest debt/equity: {_fmt(f.get('debt_to_equity'))} (balance sheet {f.get('debt_to_equity_as_of')})")
-    L += ["", "## 3. Shareholding & governance (% of total shares, NSE filings)"]
-    if s.get("shareholding"):
-        L += ["| Quarter | Promoter | FII | DII | of which MFs | Public (non-institutional) | Small retail (<₹2L) |",
-              "|---|---|---|---|---|---|---|"]
-        for q in s["shareholding"]:
-            L.append(f"| {q['quarter']} | {_fmt(q.get('promoter'))} | {_fmt(q.get('fii'))} | {_fmt(q.get('dii'))} | "
-                     f"{_fmt(q.get('mutual_funds'))} | {_fmt(q.get('public_non_institutions'))} | {_fmt(q.get('retail_small'))} |")
+    if IS_US:
+        L += _us_owners(s)
     else:
-        L.append("Shareholding not available (BSE-only company).")
-    p = s.get("pledge")
-    L.append(f"Promoter pledge: {_fmt(p['pledged_pct_of_promoter_shares'], '%')} of promoter shares = "
-             f"{_fmt(p['pledged_pct_of_total_shares'], '%')} of total shares (as of {p['as_of']})"
-             if p else "Promoter pledge: none disclosed on NSE.")
-    L += ["", "## 4. Technicals & volume (NSE+BSE combined)",
-          f"- 52-week range ₹{t['low_52w']}–₹{t['high_52w']} ({_fmt(t['pct_from_52w_high'], '%')} from high); "
+        L += _in_owners(s)
+    L += ["", "## 4. Technicals & volume" + ("" if IS_US else " (NSE+BSE combined)"),
+          f"- 52-week range {C}{t['low_52w']}–{C}{t['high_52w']} ({_fmt(t['pct_from_52w_high'], '%')} from high); "
           f"1-month return {_fmt(t['return_1m_pct'], '%')}, 1-year {_fmt(t['return_1y_pct'], '%')}",
-          f"- 50-day avg ₹{t['sma_50']}, 200-day avg ₹{t['sma_200']}, RSI(14) {t['rsi_14']}",
+          f"- 50-day avg {C}{t['sma_50']}, 200-day avg {C}{t['sma_200']}, RSI(14) {t['rsi_14']}",
           f"- Volume today {_fmt(t['volume_today'])}; 1-week avg {_fmt(t['volume_1w_avg'])}; "
-          f"1-year avg {_fmt(t['volume_1y_avg'])} → {s.get('spike_x') or round(t['volume_1w_avg'] / max(t['volume_1y_avg'], 1), 1)}× spike",
-          f"- Delivery today {_fmt(t['delivery_pct_today'], '%')} vs 30-day avg {_fmt(t['delivery_pct_30d_avg'], '%')} "
-          "(low delivery on a spike = intraday speculation; high = genuine buying)",
-          f"- On-balance volume change over 3 months: {_fmt(t['obv_change_3m_vs_avg_daily_volume'])} days of average volume "
+          f"1-year avg {_fmt(t['volume_1y_avg'])} → {s.get('spike_x') or round(t['volume_1w_avg'] / max(t['volume_1y_avg'], 1), 1)}× spike"]
+    if not IS_US:   # the US has no delivery data
+        L.append(f"- Delivery today {_fmt(t['delivery_pct_today'], '%')} vs 30-day avg {_fmt(t['delivery_pct_30d_avg'], '%')} "
+                 "(low delivery on a spike = intraday speculation; high = genuine buying)")
+    L += [f"- On-balance volume change over 3 months: {_fmt(t['obv_change_3m_vs_avg_daily_volume'])} days of average volume "
           "(positive = accumulation, negative = distribution)",
           f"- Price range in the 60 sessions before the last week: {_fmt(t['range_60d_before_spike_pct'], '%')} "
           "(narrow range = consolidation)",
@@ -156,9 +187,9 @@ def render_markdown(s: dict) -> str:
           f"- TTM P/E {_fmt(f.get('pe'))}, P/B {_fmt(f.get('pb'))}, PEG {_fmt(f.get('peg'))} (P/E ÷ 3-yr profit CAGR)",
           f"- ROE {_fmt(f.get('roe_pct'), '%')} (last FY; 3-yr avg {_fmt(f.get('roe_3y_avg_pct'), '%')}), "
           f"ROCE {_fmt(f.get('roce_pct'), '%')}, ROA {_fmt(f.get('roa_pct'), '%')}, asset turnover {_fmt(f.get('asset_turnover'))}×",
-          f"- TTM sales ₹{_fmt(f.get('ttm_sales'))} Cr, TTM net profit ₹{_fmt(f.get('ttm_net_profit'))} Cr"]
+          f"- TTM sales {C}{_fmt(f.get('ttm_sales'))} {U}, TTM net profit {C}{_fmt(f.get('ttm_net_profit'))} {U}"]
     if s.get("announcements"):
-        L += ["", "## 7. Official announcements to NSE (last 30 days)"]
+        L += ["", "## 7. Official filings: SEC 8-K (last 30 days)" if IS_US else "## 7. Official announcements to NSE (last 30 days)"]
         L += [f"- {a['at'][:10]} {a['subject']}: {a['text'][:300]}" for a in s["announcements"]]
     return "\n".join(_spaced(L))
 

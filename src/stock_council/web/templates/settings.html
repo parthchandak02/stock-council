@@ -3,7 +3,7 @@
 {% block main %}
 <section class="head"><div><p class="eyebrow">Settings</p><h1>Screen and council</h1></div></section>
 {% if saved %}<div class="note good">{{ icon('check', 16) }}<span>Saved. The next run uses it.{% if sent %} A verify link went to <b>{{ sent }}</b>: click it once to start receiving the email.{% endif %}</span></div>{% endif %}
-<form method="post" action="/settings" class="settings">
+<form method="post" action="{{ B }}/settings" class="settings">
   <h2 class="sub" id="schedule">{{ icon('clock', 18) }}Evening run</h2>
   {% set sc = st.schedule %}
   <div class="fields card">

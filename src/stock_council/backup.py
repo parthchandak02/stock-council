@@ -11,7 +11,9 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
-from .config import DB_PATH
+from .config import DB_PATH, MARKET
+
+PREFIX = "stock-council" if MARKET["code"] == "in" else f"stock-council-{MARKET['code']}"
 
 KEEP = ["settings", "runs", "picks", "orders", "screen_hits"]
 DEFAULT_DIR = "/srv/backups/stock-council"
@@ -20,7 +22,7 @@ DEFAULT_DIR = "/srv/backups/stock-council"
 def run(out_dir: str | None = None, keep_days: int = 30) -> dict:
     out = Path(out_dir or os.environ.get("SC_BACKUP_DIR", DEFAULT_DIR))
     out.mkdir(parents=True, exist_ok=True)
-    tmp = out / f".stock-council-{date.today():%Y-%m-%d}.sqlite"
+    tmp = out / f".{PREFIX}-{date.today():%Y-%m-%d}.sqlite"
     tmp.unlink(missing_ok=True)
     src = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=60)
     src.execute("PRAGMA busy_timeout=60000")
@@ -41,13 +43,13 @@ def run(out_dir: str | None = None, keep_days: int = 30) -> dict:
     dst.execute("VACUUM")
     dst.close()
     src.close()
-    final = out / f"stock-council-{date.today():%Y-%m-%d}.sqlite.gz"
+    final = out / f"{PREFIX}-{date.today():%Y-%m-%d}.sqlite.gz"
     with open(tmp, "rb") as f, gzip.open(final, "wb", compresslevel=9) as g:
         shutil.copyfileobj(f, g)
     tmp.unlink()
     os.chmod(final, 0o640)
     # keep the last `keep_days` files
-    olds = sorted(out.glob("stock-council-*.sqlite.gz"))[:-keep_days]
+    olds = sorted(out.glob(f"{PREFIX}-2*.sqlite.gz"))[:-keep_days]
     for o in olds:
         o.unlink()
     return {"file": str(final), "bytes": final.stat().st_size, "rows": rows, "removed": len(olds)}

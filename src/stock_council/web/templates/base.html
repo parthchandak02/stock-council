@@ -16,21 +16,26 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=13">
+<link rel="stylesheet" href="/static/style.css?v=14">
 {% block head %}{% endblock %}
 </head><body>
 <header class="top">
-  <a class="brand" href="/"><img src="/icon.svg" alt="" width="28" height="28">Stock Council</a>
+  <a class="brand" href="{{ B }}/"><img src="/icon.svg" alt="" width="28" height="28">Stock Council</a>
+  <nav class="mkt" aria-label="Market">
+    <a href="/" class="{{ 'on' if not IS_US }}"><span>🇮🇳</span>India</a>
+    <a href="/us/" class="{{ 'on' if IS_US }}"><span>🇺🇸</span>US</a>
+  </nav>
   <nav class="tabs" aria-label="Main">
-    <a href="/" class="{{ 'on' if nav == 'today' }}">{{ icon('today', 20) }}<span>Today</span></a>
-    <a href="/screener" class="{{ 'on' if nav == 'screener' }}">{{ icon('filter', 20) }}<span>Screener</span></a>
-    <a href="/how" class="{{ 'on' if nav == 'how' }}">{{ icon('how', 20) }}<span>How it works</span></a>
-    <a href="/history" class="{{ 'on' if nav == 'history' }}">{{ icon('history', 20) }}<span>History</span></a>
-    <a href="/settings" class="{{ 'on' if nav == 'settings' }}">{{ icon('settings', 20) }}<span>Settings</span></a>
+    <a href="{{ B }}/" class="{{ 'on' if nav == 'today' }}">{{ icon('today', 20) }}<span>Today</span></a>
+    <a href="{{ B }}/screener" class="{{ 'on' if nav == 'screener' }}">{{ icon('filter', 20) }}<span>Screener</span></a>
+    <a href="{{ B }}/how" class="{{ 'on' if nav == 'how' }}">{{ icon('how', 20) }}<span>How it works</span></a>
+    <a href="{{ B }}/history" class="{{ 'on' if nav == 'history' }}">{{ icon('history', 20) }}<span>History</span></a>
+    <a href="{{ B }}/settings" class="{{ 'on' if nav == 'settings' }}">{{ icon('settings', 20) }}<span>Settings</span></a>
   </nav>
 </header>
 <main>{% block main %}{% endblock %}</main>
-<footer class="foot">Facts from NSE &amp; BSE filings · opinions from AI models · not investment advice</footer>
+<footer class="foot">{{ M.flag }} {{ M.name }} · facts from {{ "SEC filings and market data" if IS_US else "NSE &amp; BSE filings" }} · opinions from AI models · not investment advice</footer>
+<script>window.B = "{{ B }}";</script>
 <script src="/static/ui.js?v=1"></script>
 {% block scripts %}{% endblock %}
 </body></html>

@@ -73,13 +73,12 @@ def email_on() -> bool:
 
 def not_time_yet() -> str | None:
     """Reason to skip this timer tick, or None when the evening run should start now."""
+    from .config import market_now
     from .daily import db, ist_today
-    from .exchanges import ist_today as _d
-    from datetime import datetime, timedelta, timezone
     from .settings import get_settings
     conn = db()
     sc = get_settings(conn)["schedule"]
-    now = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+    now = market_now()   # India or New York time, per market
     if not sc.get("enabled"):
         return "schedule is off in Settings"
     if now.weekday() not in (sc.get("days") or []):

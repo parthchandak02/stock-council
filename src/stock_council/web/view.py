@@ -1,12 +1,15 @@
 """Turns a fact sheet into the few numbers worth a glance, each marked good / watch / bad."""
 from __future__ import annotations
 
+from ..config import IS_US, MARKET
 from ..council import VOTE_GROUP
+
+CUR, UNIT = MARKET["cur"], MARKET["unit_label"]
 
 FILTER_LABELS = {
     "volume_spike_multiple": ("Volume spike", "1-week average volume above {v:g}× the 1-year average"),
-    "min_volume": ("Traded today", "more than {v:,.0f} shares traded today"),
-    "min_market_cap_cr": ("Size", "market cap above ₹{v:,.0f} Cr"),
+    "min_volume": ("Traded today", "more than $ {v:,.0f} traded today" if IS_US else "more than {v:,.0f} shares traded today"),
+    "min_market_cap_cr": ("Size", f"market cap above {CUR}{{v:,.0f}} {UNIT}"),
     "max_pe": ("Price", "P/E below {v:g}"),
     "min_roe_pct": ("Returns", "ROE above {v:g}%"),
     "max_debt_to_equity": ("Debt", "debt / equity below {v:g}"),
@@ -55,7 +58,7 @@ def key_numbers(sheet: dict) -> list[dict]:
                     "tone": _tone(conv, 80, 50), "hint": f"Operating cash ÷ (profit + depreciation) · FY{(a0.get('fy_end') or '')[2:4]}"})
     fcf = a0.get("free_cash_flow")
     neg_years = sum(1 for a in annual[:3] if (a.get("free_cash_flow") or 0) < 0)
-    out.append({"group": "Cash", "label": "Free cash flow", "value": "-" if fcf is None else f"₹{fcf:,.0f} Cr",
+    out.append({"group": "Cash", "label": "Free cash flow", "value": "-" if fcf is None else f"{CUR}{fcf:,.0f} {UNIT}",
                 "tone": "na" if fcf is None else ("good" if neg_years == 0 else "bad" if neg_years >= 2 else "warn"),
                 "hint": f"Negative {neg_years} of last 3 years" if neg_years else "Positive all of last 3 years"})
 
@@ -72,8 +75,12 @@ def key_numbers(sheet: dict) -> list[dict]:
         out.append({"group": "Debt", "label": "Cash cycle", "value": "-" if wc is None else f"{wc:.0f} days",
                     "tone": _tone(wc, 60, 120, False), "hint": "Days cash is tied up in stock and dues"})
 
+    if IS_US:
+        out += _us_owner_tiles(sheet)
+        sh, pl = [], {}
     pledge = pl.get("pledged_pct_of_promoter_shares")
-    out.append({"group": "Owners", "label": "Promoter shares pledged", "value": _pct(pledge) if pl and pledge else "None",
+    if not IS_US:
+      out.append({"group": "Owners", "label": "Promoter shares pledged", "value": _pct(pledge) if pl and pledge else "None",
                 "tone": "good" if not pl or not pledge else _tone(pledge, 0, 10, False),
                 "hint": f"= {_pct(pl.get('pledged_pct_of_total_shares'))} of all shares" if pl and pledge else "No pledge disclosed"})
     if len(sh) >= 2:
@@ -88,7 +95,8 @@ def key_numbers(sheet: dict) -> list[dict]:
                     "tone": "good" if di > 0.5 else ("bad" if di < -1 else "warn"), "hint": f"Change since {old.get('quarter', '')[:6]}"})
 
     dl, dla = t.get("delivery_pct_today"), t.get("delivery_pct_30d_avg")
-    out.append({"group": "Trading", "label": "Delivery today", "value": _pct(dl, 0) + ("" if dla is None else f" vs {dla:.0f}%"),
+    if not IS_US:   # the US has no delivery data
+      out.append({"group": "Trading", "label": "Delivery today", "value": _pct(dl, 0) + ("" if dla is None else f" vs {dla:.0f}%"),
                 "tone": "na" if dl is None or not dla else ("good" if dl >= dla * 0.9 else "bad" if dl < dla * 0.6 else "warn"),
                 "hint": "vs 30-day average · low = day trading"})
     rsi = t.get("rsi_14")
@@ -108,6 +116,26 @@ def key_numbers(sheet: dict) -> list[dict]:
     return out
 
 
+def _us_owner_tiles(sheet: dict) -> list[dict]:
+    o, ins = sheet.get("owners_us") or {}, sheet.get("insiders") or {}
+    out = []
+    if ins:
+        net = ins.get("net_usd") or 0
+        big = abs(net) >= 1e6
+        val = "None" if not (ins.get("buys_usd") or ins.get("sells_usd")) else f"{'+' if net > 0 else '−'}${abs(net) / 1e6:,.1f}M"
+        out.append({"group": "Owners", "label": "Insider trades, 90 days", "value": val,
+                    "tone": "na" if val == "None" else ("good" if net > 0 else "bad" if big else "warn"),
+                    "hint": f"{ins.get('buyers', 0)} buying, {ins.get('sellers', 0)} selling (SEC Form 4)"})
+    ip, inst = o.get("insiders_pct"), o.get("institutions_pct")
+    out.append({"group": "Owners", "label": "Insiders / institutions", "value": f"{_pct(ip)} / {_pct(inst)}",
+                "tone": "na" if inst is None else ("good" if inst >= 40 else "warn"), "hint": "Share of company held"})
+    sf = o.get("short_pct_float")
+    out.append({"group": "Owners", "label": "Short interest", "value": _pct(sf),
+                "tone": "na" if sf is None else ("good" if sf < 5 else "bad" if sf > 15 else "warn"),
+                "hint": f"{o.get('short_ratio_days') or '-'} days to cover"})
+    return out
+
+
 def why(p: dict) -> dict:
     """The majority camp's main risk and what would change their mind."""
     v = p.get("verdict") or {}
@@ -122,7 +150,7 @@ def short_fail(s: str) -> str:
     import re
     if s.startswith("market cap"):
         m = re.search(r"market cap ([\d.]+|None)", s)
-        return "Small" + (f" (₹{float(m.group(1)):,.0f} Cr)" if m and m.group(1) != "None" else "")
+        return "Small" + (f" ({CUR}{float(m.group(1)):,.0f} {UNIT})" if m and m.group(1) != "None" else "")
     if "loss" in s:
         return "Loss-making"
     if s.startswith("P/E"):

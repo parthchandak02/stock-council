@@ -39,7 +39,7 @@
     const q = new URLSearchParams({view: 'cm', fs: '1', to: d.to, su: s.subject, body: s.text});
     if (d.gmail) q.set('authuser', d.gmail);
     window.open('https://mail.google.com/mail/?' + q.toString(), '_blank', 'noopener');   // open first: no popup block
-    fetch('/orders', {method: 'POST', headers: {'content-type': 'application/json'}, keepalive: true,
+    fetch((window.B || '') + '/orders', {method: 'POST', headers: {'content-type': 'application/json'}, keepalive: true,
       body: JSON.stringify({run_id: +d.run, isin: d.isin, symbol: d.symbol, name: d.name, side: s.side,
                             account: s.account, lines: s.rows, subject: s.subject})});
     btn.innerHTML = 'Draft opened in Gmail ✓';

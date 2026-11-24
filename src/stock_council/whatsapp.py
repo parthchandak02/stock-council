@@ -9,6 +9,8 @@ import os
 import socket
 from datetime import date
 
+from .config import MARKET
+
 SOCKET = os.environ.get("SC_WHATSAPP_SOCKET", "/run/stock-council-hermes.sock")
 EMOJI = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡", "NO CONSENSUS": "⚪"}
 WORD = {"BUY": "BUY", "SELL": "SELL", "HOLD": "HOLD", "NO CONSENSUS": "SPLIT"}
@@ -24,7 +26,7 @@ def build_message(run: dict, picks: list[dict], site: str = "") -> str:
         v = p.get("verdict") or {}
         call = v.get("call") or ("ERROR" if p.get("error") else "-")
         name = nice_name(p.get("name") or p.get("symbol"))[:28]
-        price = f"₹{p['price']:,.0f}" if p.get("price") else ""
+        price = f"{MARKET['cur']}{p['price']:,.0f}" if p.get("price") else ""
         if p.get("error") or not v:
             lines.append(f"⚠️ {name} {price} · analysis failed")
         else:

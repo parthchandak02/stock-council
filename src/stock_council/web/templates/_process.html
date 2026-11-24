@@ -25,7 +25,7 @@
     <div><h3>Check the business</h3>
     <p class="muted">Each spike must pass all of these:</p>
     <p class="filters">
-      <span class="tag">Market cap &gt; ₹{{ run.filters.min_market_cap_cr|int }} Cr</span>
+      <span class="tag">Market cap &gt; {{ M.cur }}{{ run.filters.min_market_cap_cr|int }} {{ M.unit_label }}</span>
       <span class="tag">P/E &lt; {{ run.filters.max_pe|round(0)|int }}</span>
       <span class="tag">ROE &gt; {{ run.filters.min_roe_pct|round(0)|int }}%</span>
       <span class="tag">Debt/equity &lt; {{ run.filters.max_debt_to_equity }}</span>
@@ -76,7 +76,7 @@
               {% else %}<span><b>{{ o.name }}</b> <span class="v {{ tone_of(o.verdict) }}">{{ o.verdict }} {{ o.score }}</span><br><span class="muted">{{ (o.key_risk or (o.lines or [''])[0])[:160] }}</span></span>{% endif %}</li>
           {% endfor %}</ul>
         </details>{% endif %}
-        {% if st in ('news', 'council', 'done') %}<a class="open" href="/stock/{{ run.id }}/{{ p.isin }}">{{ 'Open full page' if st == 'done' else 'Open (updates live)' }}{{ icon('chev', 14) }}</a>{% endif %}
+        {% if st in ('news', 'council', 'done') %}<a class="open" href="{{ B }}/stock/{{ run.id }}/{{ p.isin }}">{{ 'Open full page' if st == 'done' else 'Open (updates live)' }}{{ icon('chev', 14) }}</a>{% endif %}
         {% if st == 'error' %}<p class="small muted">{{ (p.error or '')[:140] }}</p>{% endif %}
       </li>
     {% endfor %}</ul>

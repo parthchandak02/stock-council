@@ -6,6 +6,7 @@ and manifest paths straight here, so phones and browsers can show the app icon b
 from __future__ import annotations
 
 import json
+import os
 import threading
 from datetime import date
 from pathlib import Path
@@ -16,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from ..config import DEFAULT_FILTERS
+from ..config import DEFAULT_FILTERS, IS_US, MARKET, PRIMARY_EXCH as PX
 from ..council import COUNCIL, DEFAULT_PROMPT, VOTE_GROUP
 import uuid
 
@@ -31,11 +32,14 @@ app = FastAPI(title="Stock Council", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 tpl = Jinja2Templates(directory=HERE / "templates")
 tpl.env.filters["md"] = lambda s: markdown.markdown(s or "", extensions=["tables"])
-tpl.env.filters["inr"] = lambda x: "-" if x is None else f"₹{x:,.2f}".rstrip("0").rstrip(".") if x < 1000 else f"₹{x:,.0f}"
+_C = MARKET["cur"]
+tpl.env.filters["inr"] = lambda x: "-" if x is None else f"{_C}{x:,.2f}" if x < 1000 else f"{_C}{x:,.0f}"
 tpl.env.filters["nice"] = nice_name
 tpl.env.filters["fail"] = short_fail
 tpl.env.filters["num"] = lambda x: "-" if x is None else f"{x:,}"
 tpl.env.filters["day"] = lambda s: date.fromisoformat(s[:10]).strftime("%a %-d %b") if s else ""
+B = MARKET["base"]
+tpl.env.globals.update(B=B, M=MARKET, IS_US=IS_US)
 tpl.env.globals.update(group=lambda v: VOTE_GROUP.get(str(v or "").lower(), ""), short_name=short_name,
                        key_numbers=key_numbers,
                        FILTER_LABELS=FILTER_LABELS)
@@ -71,6 +75,28 @@ def _warm():
                 pass
             time.sleep(600)
     threading.Thread(target=go, daemon=True).start()
+
+
+US_UPSTREAM = os.environ.get("SC_US_UPSTREAM", "http://127.0.0.1:8307")
+HOP = {"connection", "keep-alive", "transfer-encoding", "content-encoding", "content-length", "host"}
+
+if not IS_US:
+    @app.api_route("/us", methods=["GET", "POST"], include_in_schema=False)
+    @app.api_route("/us/{path:path}", methods=["GET", "POST"], include_in_schema=False)
+    async def us_proxy(request: Request, path: str = ""):
+        """The US market runs as its own copy of this app (own database); India passes /us/* to it."""
+        import httpx
+        from fastapi.responses import Response
+        url = f"{US_UPSTREAM}/{path}" + (f"?{request.url.query}" if request.url.query else "")
+        headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP}
+        try:
+            async with httpx.AsyncClient(timeout=120) as c:
+                r = await c.request(request.method, url, headers=headers, content=await request.body())
+        except httpx.HTTPError:
+            return tpl.TemplateResponse(request, "message.html", {"title": "US market is starting",
+                                        "text": "The US side isn't answering yet. Try again in a minute."}, status_code=503)
+        out = {k: v for k, v in r.headers.items() if k.lower() not in HOP}
+        return Response(r.content, status_code=r.status_code, headers=out)
 
 
 @app.get("/manifest.webmanifest")
@@ -148,7 +174,7 @@ def run_page(request: Request, run_id: int):
         return page_404(request)
     picks = _picks(conn, run_id, sort=False)
     if run["kind"] == "on_demand" and run["status"] == "done" and picks:
-        return RedirectResponse(f"/stock/{run_id}/{picks[0]['isin']}", status_code=303)
+        return RedirectResponse(B + f"/stock/{run_id}/{picks[0]['isin']}", status_code=303)
     return tpl.TemplateResponse(request, "run.html", {"run": run, "picks": picks, "nav": "today"})
 
 
@@ -172,7 +198,7 @@ def stock(request: Request, run_id: int, isin: str):
         return page_404(request)
     p = _load(row)
     if p["status"] in ("queued", "facts"):
-        return RedirectResponse(f"/run/{run_id}", status_code=303)
+        return RedirectResponse(B + f"/run/{run_id}", status_code=303)
     return tpl.TemplateResponse(request, "stock.html", {
         "run": run, "p": p, "nums": key_numbers(p.get("sheet") or {}), "why": why(p), "nav": "today",
         "chart": price_chart(conn, isin, run["day"]), "peers": peers(conn, isin),
@@ -208,7 +234,7 @@ def check(symbol: str = Form(...)):
     sym = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
     run_id = start_run("on_demand")
     threading.Thread(target=_quiet, args=(run_one, sym, run_id), daemon=True).start()
-    return RedirectResponse(f"/run/{run_id}", status_code=303)
+    return RedirectResponse(B + f"/run/{run_id}", status_code=303)
 
 
 @app.post("/screen")
@@ -216,10 +242,10 @@ def screen_now():
     conn = db()
     busy = conn.execute("SELECT id FROM runs WHERE status='running' AND kind IN ('daily','manual')").fetchone()
     if busy:
-        return RedirectResponse(f"/run/{busy['id']}", status_code=303)
+        return RedirectResponse(B + f"/run/{busy['id']}", status_code=303)
     run_id = start_run("manual")
     threading.Thread(target=_quiet, args=(lambda rid: run_screen_job("manual", run_id=rid), run_id), daemon=True).start()
-    return RedirectResponse(f"/run/{run_id}", status_code=303)
+    return RedirectResponse(B + f"/run/{run_id}", status_code=303)
 
 
 def _quiet(fn, *args):
@@ -277,7 +303,7 @@ async def save_settings(request: Request):
     conn = db()
     if form.get("reset") == "prompt":
         save_setting(conn, "prompt", DEFAULT_PROMPT)
-        return RedirectResponse("/settings?saved=prompt", status_code=303)
+        return RedirectResponse(B + "/settings?saved=prompt", status_code=303)
     filters = {}
     for k, default in DEFAULT_FILTERS.items():
         try:
@@ -313,7 +339,7 @@ async def save_settings(request: Request):
         save_setting(conn, "accounts", [x.strip() for x in (form.get("accounts") or "").replace(",", "\n").splitlines() if x.strip()])
         save_setting(conn, "gmail_account", (form.get("gmail_account") or "").strip())
     from urllib.parse import quote
-    return RedirectResponse("/settings?saved=1" + (f"&sent={quote(', '.join(sent))}" if sent else ""), status_code=303)
+    return RedirectResponse(B + "/settings?saved=1" + (f"&sent={quote(', '.join(sent))}" if sent else ""), status_code=303)
 
 
 # ---------- screener ----------
@@ -372,20 +398,20 @@ async def screener_save(request: Request):
     rules = _rules_from(form)
     name = (form.get("name") or "").strip()[:60]
     if not rules or not name:
-        return RedirectResponse("/screener", status_code=303)
+        return RedirectResponse(B + "/screener", status_code=303)
     conn = db()
     screens = get_settings(conn).get("screens") or []
     sid = uuid.uuid4().hex[:8]
     screens.append({"id": sid, "name": name, "rules": rules, "daily": form.get("daily") == "1"})
     save_setting(conn, "screens", screens)
-    return RedirectResponse(f"/screener?s={sid}", status_code=303)
+    return RedirectResponse(B + f"/screener?s={sid}", status_code=303)
 
 
 @app.post("/screener/delete")
 def screener_delete(sid: str = Form(...)):
     conn = db()
     save_setting(conn, "screens", [s for s in get_settings(conn).get("screens") or [] if s["id"] != sid])
-    return RedirectResponse("/screener", status_code=303)
+    return RedirectResponse(B + "/screener", status_code=303)
 
 
 @app.post("/council")
@@ -393,7 +419,7 @@ async def council_batch(request: Request):
     form = await request.form()
     picks = [x.split("|", 1) for x in form.getlist("pick") if "|" in x][:10]
     if not picks:
-        return RedirectResponse("/screener", status_code=303)
+        return RedirectResponse(B + "/screener", status_code=303)
     if len(picks) == 1:
         run_id = start_run("on_demand")
         threading.Thread(target=_quiet, args=(run_one, picks[0][1], run_id), daemon=True).start()
@@ -401,7 +427,7 @@ async def council_batch(request: Request):
         run_id = start_run("custom")
         items = [{"isin": i, "symbol": s, "name": s} for i, s in picks]
         threading.Thread(target=_quiet, args=(run_custom, run_id, items), daemon=True).start()
-    return RedirectResponse(f"/run/{run_id}", status_code=303)
+    return RedirectResponse(B + f"/run/{run_id}", status_code=303)
 
 
 # ---------- track record, chart, peers, csv ----------
@@ -422,7 +448,7 @@ def price_chart(conn, isin: str, mark_day: str | None = None) -> dict | None:
     from ..actions import adjust, aliases
     ids = aliases(conn, isin)
     df = pd.read_sql_query(
-        f"SELECT date, '{isin}' isin, COALESCE(MAX(CASE WHEN exch='NSE' THEN close END), MAX(close)) close, "
+        f"SELECT date, '{isin}' isin, COALESCE(MAX(CASE WHEN exch='{PX}' THEN close END), MAX(close)) close, "
         f"SUM(volume) vol FROM daily WHERE isin IN ({','.join('?' * len(ids))}) GROUP BY date ORDER BY date",
         conn, params=ids)
     if len(df) < 20:

@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, agree, change %}
 {% block main %}
 {% for r in running %}
-<a class="live card" href="/run/{{ r.id }}">
+<a class="live card" href="{{ B }}/run/{{ r.id }}">
   <span class="pulse"></span>
   <span><b>{{ 'Screen running' if r.kind != 'on_demand' else 'Checking a stock' }}</b>
   <span class="muted">· {{ {'download':'downloading files','scan':'scanning volumes','filter':'checking fundamentals','council':'council is voting'}.get(r.stage, 'working') }}</span></span>
@@ -9,9 +9,9 @@
 </a>
 {% endfor %}
 
-<form class="ask" method="post" action="/check" autocomplete="off">
+<form class="ask" method="post" action="{{ B }}/check" autocomplete="off">
   {{ icon('search', 18) }}
-  <input name="symbol" placeholder="Any NSE symbol" required aria-label="NSE symbol">
+  <input name="symbol" placeholder="{{ 'Any ticker, e.g. NVDA' if IS_US else 'Any NSE symbol' }}" required aria-label="NSE symbol">
   <button>Ask</button>
 </form>
 
@@ -22,9 +22,9 @@
     <p class="eyebrow">Screen · {{ run.day|day }}</p>
     <h1>{{ picks|length }} stock{{ 's' if picks|length != 1 }} worth a look</h1>
   </div>
-  <a class="howlink" href="/run/{{ run.id }}">{{ icon('target', 16) }}How these were found</a>
+  <a class="howlink" href="{{ B }}/run/{{ run.id }}">{{ icon('target', 16) }}How these were found</a>
 </section>
-<a class="funnel" href="/run/{{ run.id }}" aria-label="How the list was found">
+<a class="funnel" href="{{ B }}/run/{{ run.id }}" aria-label="How the list was found">
   <span><b>{{ (fn.companies or 0)|num }}</b>companies</span>{{ icon('chev', 14, 'sep') }}
   <span><b>{{ run.spikes or '-' }}</b>volume spikes</span>{{ icon('chev', 14, 'sep') }}
   <span><b>{{ picks|length }}</b>pass filters</span>{{ icon('chev', 14, 'sep') }}
@@ -33,7 +33,7 @@
 
 <ul class="stocks">
 {% for p in picks %}{% set s = p.sheet or {} %}
-<li><a href="/stock/{{ run.id }}/{{ p.isin }}" class="row">
+<li><a href="{{ B }}/stock/{{ run.id }}/{{ p.isin }}" class="row">
   <span class="who"><b>{{ (p.name or p.symbol)|nice }}</b><span class="muted">{{ p.symbol }} · {{ p.price|inr }} {{ change(s.change_pct) }}</span></span>
   <span class="vote">{{ verdict(p.verdict) }}{{ dots(p.opinions) }}</span>
   <span class="score"><b>{{ (p.verdict or {}).avg_score or '–' }}</b><span class="muted">/10</span></span>
@@ -49,7 +49,7 @@
   {{ icon('clock', 36, '', 'd') }}
   <h1>No screen yet</h1>
   <p class="muted">It runs by itself on weekdays at 8:15 pm, after the market files are out.</p>
-  <form method="post" action="/screen"><button class="btn">{{ icon('play', 16) }}Run it now</button></form>
+  <form method="post" action="{{ B }}/screen"><button class="btn">{{ icon('play', 16) }}Run it now</button></form>
 </div>
 {% endif %}
 
@@ -57,7 +57,7 @@
 <h2 class="sub">Stocks you checked</h2>
 <ul class="stocks compact">
 {% for c in checks %}
-<li><a class="row" href="/run/{{ c.id }}">
+<li><a class="row" href="{{ B }}/run/{{ c.id }}">
   <span class="who"><b>{{ (c.name or c.symbol or '')|nice }}</b><span class="muted">{{ c.symbol }} · {{ c.day|day }}</span></span>
   <span class="vote">{% if c.status == 'running' %}<span class="chip none">{{ icon('spin', 14, 'spin') }}Working</span>{% elif c.status == 'failed' %}<span class="chip sell">{{ icon('alert', 14) }}Failed</span>{% else %}{{ verdict(c.verdict) }}{% endif %}</span>
   <span class="score"><b>{{ c.verdict.avg_score or '–' }}</b><span class="muted">/10</span></span>
@@ -67,7 +67,7 @@
 </ul>
 {% endif %}
 {% if run %}
-<form method="post" action="/screen" class="rerun"><button class="btn ghost">{{ icon('play', 14) }}Run the screen again now</button><span class="muted small">takes ~5 min · about $0.50</span></form>
+<form method="post" action="{{ B }}/screen" class="rerun"><button class="btn ghost">{{ icon('play', 14) }}Run the screen again now</button><span class="muted small">takes ~5 min · about $0.50</span></form>
 {% endif %}
 {% endblock %}
 {% block scripts %}{% if running %}<script>setTimeout(() => location.reload(), 15000)</script>{% endif %}{% endblock %}

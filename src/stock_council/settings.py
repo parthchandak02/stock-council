@@ -7,9 +7,11 @@ from .config import DEFAULT_FILTERS
 from .council import COUNCIL, DEFAULT_PROMPT
 from .store import ensure_schema
 
-DEFAULT_SCHEDULE = {"enabled": True, "time": "20:15", "days": [0, 1, 2, 3, 4], "max_stocks": 20}  # Mon=0, India time
+from .config import IS_US, MARKET
+
+DEFAULT_SCHEDULE = {"enabled": True, "time": MARKET["default_time"], "days": [0, 1, 2, 3, 4], "max_stocks": 20}  # Mon=0, market time
 DEFAULT_EMAIL = {"enabled": False, "to": [], "cc": []}
-DEFAULT_WHATSAPP = {"enabled": True}
+DEFAULT_WHATSAPP = {"enabled": not IS_US}   # India: Dad's group. US: site only (for now)
 
 SCHEMA = "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated TEXT)"
 

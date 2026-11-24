@@ -15,7 +15,9 @@ import math
 import pandas as pd
 import yfinance as yf
 
-CR = 1e7
+from .config import MARKET
+
+CR = MARKET["unit"]  # ₹ crore (India) or $ million (US)
 
 
 def _row(df: pd.DataFrame, *names: str) -> list[float | None]:
@@ -139,6 +141,7 @@ def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = Fal
     pe = _div(mcap, ttm_pat) if ttm_pat and ttm_pat > 0 else None
     profit_cagr_3y = _cagr(at(pat, 0), at(pat, 3), 3)
     sector = industry = div_yield = ev_ebitda = None
+    owners: dict = {}
     if with_sector:
         try:
             info = t.get_info()
@@ -147,6 +150,9 @@ def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = Fal
             div_yield = round(dy * 100, 2) if isinstance(dy, (int, float)) else None
             ev = info.get("enterpriseToEbitda")
             ev_ebitda = round(ev, 1) if isinstance(ev, (int, float)) else None
+            pct = lambda k: round(info[k] * 100, 2) if isinstance(info.get(k), (int, float)) else None
+            owners = {"insiders_pct": pct("heldPercentInsiders"), "institutions_pct": pct("heldPercentInstitutions"),
+                      "short_pct_float": pct("shortPercentOfFloat"), "short_ratio_days": info.get("shortRatio")}
         except Exception:
             pass
     qs5 = [q["sales"] for q in quarters] if quarters else []
@@ -157,7 +163,7 @@ def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = Fal
             return round((xs[0] / xs[4] - 1) * 100, 1)
         return None
     return {
-        "yahoo_symbol": yahoo_symbol, "sector": sector, "industry": industry,
+        "yahoo_symbol": yahoo_symbol, "sector": sector, "industry": industry, **owners,
         "price": _r(price), "shares_cr": _r(shares / CR) if shares else None,
         "market_cap_cr": _r(mcap),
         "ttm_net_profit": _r(ttm_pat), "ttm_sales": _r(ttm_sales),

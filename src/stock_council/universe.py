@@ -163,7 +163,7 @@ def refresh(limit: int | None = None, max_age_days: int = 7, force: list[str] | 
     today = date.today()
 
     def due(i):
-        if force and i in force:
+        if max_age_days <= 0 or (force and i in force):   # 0 = re-fetch everything, failures included
             return True
         if i not in have:
             return True

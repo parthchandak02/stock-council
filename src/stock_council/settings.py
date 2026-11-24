@@ -18,6 +18,10 @@ def get_settings(conn) -> dict:
         "prompt": rows.get("prompt") or DEFAULT_PROMPT,
         "models": rows.get("models") or COUNCIL,
         "screens": rows.get("screens") or [],
+        # Broker orders by email (values live in the database, not in this public repo)
+        "broker_to": rows.get("broker_to") or "",
+        "accounts": rows.get("accounts") or [],
+        "gmail_account": rows.get("gmail_account") or "",
     }
 
 

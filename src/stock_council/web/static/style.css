@@ -285,3 +285,26 @@ code{font:13px ui-monospace,monospace;background:var(--soft);padding:1px 5px;bor
 .trackcta{display:flex;align-items:center;gap:12px;padding:12px 14px;margin:8px 0 16px} .trackcta>span{display:flex;flex-direction:column;flex:1}
 .score .pos{color:var(--buy)} .score .neg{color:var(--sell)}
 .lead+.nums{margin-top:14px}
+/* broker order */
+.order{padding:4px 16px 16px;margin-top:14px;display:grid;gap:12px}
+.order .sub{margin:12px 0 0}
+.side{display:flex;gap:8px}
+.side label{flex:1} .side input{position:absolute;opacity:0}
+.side span{display:flex;align-items:center;justify-content:center;gap:6px;padding:11px;border-radius:11px;border:1.5px solid var(--line);font-weight:700;cursor:pointer;color:var(--mute)}
+.side input:checked+span.buy{border-color:var(--buy);background:var(--buy-bg);color:var(--buy)}
+.side input:checked+span.sell{border-color:var(--sell);background:var(--sell-bg);color:var(--sell)}
+.side input:focus-visible+span{outline:2px solid var(--brand)}
+.acct{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:600}
+.acct select{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 12px;min-width:160px}
+.lines{display:grid;gap:6px}
+.lh,.line{display:grid;grid-template-columns:1fr 1fr 34px;gap:8px;align-items:center}
+.ol{display:grid;gap:6px}
+.line .rm{background:transparent;color:var(--mute);border:1px solid var(--line);padding:6px 0;font-size:18px;line-height:1}
+.addline{justify-self:start;padding:8px 12px}
+.preview{padding:10px 12px;background:var(--soft);box-shadow:none}
+.preview p{margin:0 0 4px} .preview pre{margin:6px 0 0;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}
+.order.selling .go{background:var(--sell)}
+.order .go{width:100%;padding:13px}
+.olog{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:6px;font-size:14px} .olog.pad{padding:0 14px 14px}
+.chip.buy,.chip.sell{font-size:12px}
+.fields.stack label{flex-direction:column;align-items:stretch;gap:6px} .fields.stack textarea,.fields.stack input{width:100%;text-align:left}

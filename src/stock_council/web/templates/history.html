@@ -3,6 +3,11 @@
 {% block main %}
 <section class="head"><div><p class="eyebrow">History</p><h1>Every run, kept</h1></div></section>
 <a class="card trackcta" href="/track">{{ icon('target', 20) }}<span><b>Track record</b><span class="muted small">How every call has done since, and which AI is right most often</span></span>{{ icon('chev', 18, 'chev') }}</a>
+{% if orders %}
+<details class="fold card" id="orders"><summary>{{ icon('mail', 18) }}<b>Broker orders prepared</b><span class="muted small">{{ orders|length }}</span>{{ icon('chevdown', 16, 'tw') }}</summary>
+  <ul class="olog pad">{% for o in orders %}<li><span class="chip {{ o.side }}">{{ 'Buy' if o.side == 'buy' else 'Sell' }}</span> <b>{{ (o.name or o.symbol)|nice }}</b> · {{ o.account }} · {{ o.created|day }}<br><span class="muted small">{% for l in o.lines %}{{ l.qty }} × ₹{{ '%g'|format(l.price) }}{{ ', ' if not loop.last }}{% endfor %}</span></li>{% endfor %}</ul>
+</details>
+{% endif %}
 <ul class="stocks">
 {% for r in runs %}
 <li><a class="row" href="/run/{{ r.id }}">

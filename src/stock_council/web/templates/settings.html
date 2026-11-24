@@ -22,6 +22,16 @@
     <textarea name="models" rows="8" class="mono">{{ models_text }}</textarea>
   </details>
 
+  <h2 class="sub" id="broker">{{ icon('mail', 18) }}Broker orders</h2>
+  <div class="fields card stack">
+    <label><span><b>Broker email addresses</b><span class="muted small">Comma separated</span></span>
+      <textarea name="broker_to" rows="2">{{ st.broker_to }}</textarea></label>
+    <label><span><b>Account codes</b><span class="muted small">One per line, as they go in the subject</span></span>
+      <textarea name="accounts" rows="3">{{ st.accounts|join('\n') }}</textarea></label>
+    <label><span><b>Gmail account to send from</b><span class="muted small">Opens the draft in this account</span></span>
+      <input name="gmail_account" type="email" value="{{ st.gmail_account }}"></label>
+  </div>
+
   <div class="actions"><button class="btn">{{ icon('check', 16) }}Save</button>
   <button class="btn ghost" name="reset" value="prompt">Restore original question</button></div>
 </form>

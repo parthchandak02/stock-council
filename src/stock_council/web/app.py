@@ -20,7 +20,7 @@ from ..config import DEFAULT_FILTERS
 from ..council import COUNCIL, DEFAULT_PROMPT, VOTE_GROUP
 import uuid
 
-from ..daily import db, run_custom, run_one, run_screen_job, saved_screen_history, start_run
+from ..daily import db, log_order, orders_db, run_custom, run_one, run_screen_job, saved_screen_history, start_run
 from ..universe import METRICS, PRESETS, run_rules
 from ..settings import get_settings, save_setting
 from .view import FILTER_LABELS, key_numbers, nice_name, short_fail, short_name, why
@@ -175,7 +175,32 @@ def stock(request: Request, run_id: int, isin: str):
         return RedirectResponse(f"/run/{run_id}", status_code=303)
     return tpl.TemplateResponse(request, "stock.html", {
         "run": run, "p": p, "nums": key_numbers(p.get("sheet") or {}), "why": why(p), "nav": "today",
-        "chart": price_chart(conn, isin, run["day"]), "peers": peers(conn, isin)})
+        "chart": price_chart(conn, isin, run["day"]), "peers": peers(conn, isin),
+        "broker": _broker(conn), "orders": _orders(isin)})
+
+
+def _broker(conn) -> dict:
+    st = get_settings(conn)
+    return {"to": st["broker_to"], "accounts": st["accounts"], "gmail": st["gmail_account"]}
+
+
+def _orders(isin: str | None = None, limit: int = 50) -> list[dict]:
+    conn = orders_db()
+    q = "SELECT * FROM orders" + (" WHERE isin=?" if isin else "") + " ORDER BY id DESC LIMIT ?"
+    rows = conn.execute(q, (isin, limit) if isin else (limit,)).fetchall()
+    return [dict(r) | {"lines": json.loads(r["lines"])} for r in rows]
+
+
+@app.post("/orders")
+async def save_order(request: Request):
+    d = await request.json()
+    lines = [{"qty": int(l["qty"]), "price": float(l["price"])} for l in d.get("lines", [])
+             if str(l.get("qty", "")).strip() and str(l.get("price", "")).strip()]
+    if d.get("side") not in ("buy", "sell") or not lines:
+        return JSONResponse({"ok": False}, status_code=400)
+    oid = log_order(d.get("run_id"), d.get("isin"), d.get("symbol"), d.get("name"), d["side"],
+                    d.get("account"), lines, d.get("subject"))
+    return {"ok": True, "id": oid}
 
 
 @app.post("/check")
@@ -227,7 +252,7 @@ def history(request: Request):
             p = conn.execute("SELECT name, symbol, isin, verdict FROM picks WHERE run_id=?", (run["id"],)).fetchone()
             run["pick"] = dict(p) | {"verdict": json.loads(p["verdict"]) if p and p["verdict"] else {}} if p else None
         rows.append(run)
-    return tpl.TemplateResponse(request, "history.html", {"runs": rows, "nav": "history"})
+    return tpl.TemplateResponse(request, "history.html", {"runs": rows, "orders": _orders(limit=30), "nav": "history"})
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -260,6 +285,10 @@ async def save_settings(request: Request):
             if name and "/" in model:
                 models.append({"name": name, "model": model})
     save_setting(conn, "models", models or COUNCIL)
+    if "broker_to" in form:
+        save_setting(conn, "broker_to", ", ".join(x.strip() for x in form["broker_to"].replace("\n", ",").split(",") if x.strip()))
+        save_setting(conn, "accounts", [x.strip() for x in (form.get("accounts") or "").replace(",", "\n").splitlines() if x.strip()])
+        save_setting(conn, "gmail_account", (form.get("gmail_account") or "").strip())
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 

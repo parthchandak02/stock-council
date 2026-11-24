@@ -26,6 +26,42 @@
     {% if why.trigger %}<p>{{ icon('target', 16) }}<span><b>Would change view if:</b> {{ why.trigger }}</span></p>{% endif %}
   </div>{% endif %}
 </section>
+
+{% if p.status == 'done' %}
+<section class="order card" id="order"
+  data-name="{{ (p.name or p.symbol)|nice }}" data-symbol="{{ p.symbol }}" data-isin="{{ p.isin }}" data-run="{{ run.id }}"
+  data-to="{{ broker.to }}" data-gmail="{{ broker.gmail }}">
+  <h2 class="sub">{{ icon('mail', 18) }}Send an order to the broker</h2>
+  {% if not broker.to or not broker.accounts %}
+  <p class="muted small">Add the broker's email addresses and your account codes in <a href="/settings#broker">Settings</a> first.</p>
+  {% else %}
+  <div class="side" role="radiogroup" aria-label="Buy or sell">
+    <label><input type="radio" name="side" value="buy" checked><span class="buy">{{ icon('up', 15) }}GTT Buy</span></label>
+    <label><input type="radio" name="side" value="sell"><span class="sell">{{ icon('down', 15) }}GTT Sell</span></label>
+  </div>
+  <label class="acct">Account
+    <select name="account">{% for a in broker.accounts %}<option>{{ a }}</option>{% endfor %}</select>
+  </label>
+  <div class="lines">
+    <div class="lh muted small"><span>Quantity</span><span>Trigger price ₹</span><span></span></div>
+    <div class="ol" id="lines"></div>
+    <button type="button" class="btn ghost addline">{{ icon('plus', 15) }}Add a line</button>
+  </div>
+  <div class="preview card">
+    <p class="muted small">Email preview</p>
+    <p class="pv-to small"><b>To</b> {{ broker.to }}</p>
+    <p class="pv-subject"><b>Subject</b> <span id="pv-subject"></span></p>
+    <pre id="pv-body"></pre>
+  </div>
+  <button type="button" class="btn go" id="opengmail" disabled>{{ icon('link', 16) }}Open in Gmail to review &amp; send</button>
+  <p class="muted small">Opens a ready Gmail draft. Nothing is sent until you press Send there.</p>
+  {% endif %}
+  {% if orders %}
+  <details class="peek" id="orders-{{ p.isin }}"><summary>{{ icon('history', 14) }}Orders prepared for this stock · {{ orders|length }}{{ icon('chevdown', 14, 'tw') }}</summary>
+    <ul class="olog">{% for o in orders %}<li><span class="chip {{ o.side }}">{{ 'Buy' if o.side == 'buy' else 'Sell' }}</span> {{ o.account }} · {{ o.created|day }} · {% for l in o.lines %}{{ l.qty }}×₹{{ '%g'|format(l.price) }}{{ ', ' if not loop.last }}{% endfor %}</li>{% endfor %}</ul>
+  </details>{% endif %}
+</section>
+{% endif %}
 {% if p.error %}<div class="note bad">{{ icon('alert', 16) }}<span>{{ p.error[:300] }}</span></div>{% endif %}
 
 
@@ -87,4 +123,4 @@
 </details>
 </div>
 {% endblock %}
-{% block scripts %}<script src="/static/live.js?v=1"></script>{% endblock %}
+{% block scripts %}<script src="/static/live.js?v=1"></script><script src="/static/order.js?v=2"></script>{% endblock %}

@@ -273,3 +273,28 @@ def saved_screen_history(conn, screen_id: str) -> dict:
     now = {r[0] for r in conn.execute("SELECT isin FROM screen_hits WHERE screen_id=? AND day=?", (screen_id, days[0]))}
     before = {r[0] for r in conn.execute("SELECT isin FROM screen_hits WHERE screen_id=? AND day=?", (screen_id, days[1]))} if len(days) > 1 else set()
     return {"day": days[0], "count": len(now), "new": sorted(now - before) if before else []}
+
+
+ORDERS = """
+CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY, created TEXT NOT NULL, run_id INTEGER, isin TEXT, symbol TEXT, name TEXT,
+    side TEXT NOT NULL, account TEXT, lines TEXT NOT NULL, subject TEXT
+);
+"""
+
+
+def orders_db():
+    conn = db()
+    ensure_schema(conn, "orders", ORDERS)
+    return conn
+
+
+def log_order(run_id, isin, symbol, name, side, account, lines, subject) -> int:
+    """Remember an order Dad prepared (we can't know whether he pressed Send in Gmail)."""
+    conn = orders_db()
+    with _lock:
+        cur = conn.execute("INSERT INTO orders(created, run_id, isin, symbol, name, side, account, lines, subject) "
+                           "VALUES (?,?,?,?,?,?,?,?,?)",
+                           (_now(), run_id, isin, symbol, name, side, account, json.dumps(lines), subject))
+        conn.commit()
+    return cur.lastrowid

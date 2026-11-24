@@ -1,0 +1,10 @@
+<div class="rule">
+  <select name="m" aria-label="Measure">
+    {% for g in ['Price & volume', 'Size & value', 'Quality', 'Growth', 'Cash'] %}<optgroup label="{{ g }}">
+      {% for key, m in metrics.items() if m[1] == g %}<option value="{{ key }}" {{ 'selected' if key == k }}>{{ m[0] }}{{ ' (' ~ m[2] ~ ')' if m[2] }}</option>{% endfor %}
+    </optgroup>{% endfor %}
+  </select>
+  <select name="o" aria-label="Above or below" class="op"><option value=">" {{ 'selected' if o == '>' }}>above</option><option value="<" {{ 'selected' if o == '<' }}>below</option></select>
+  <input name="v" type="number" step="any" inputmode="decimal" value="{{ '%g'|format(v) if v != '' else '' }}" required aria-label="Value">
+  <button type="button" class="rm" aria-label="Remove rule">{{ icon('x', 16) }}</button>
+</div>

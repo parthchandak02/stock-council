@@ -188,8 +188,8 @@ def start_run(kind: str, symbol: str | None = None) -> int:
     """Create the run row now (so the site can show it at once); the caller runs it in a thread."""
     conn = db()
     st = get_settings(conn)
-    day = trading_dates(conn, 1)[0] if kind == "on_demand" else ist_today()
-    return _start(conn, day, kind, st, "council" if kind == "on_demand" else "download")
+    day = trading_dates(conn, 1)[0] if kind in ("on_demand", "custom") else ist_today()
+    return _start(conn, day, kind, st, "council" if kind in ("on_demand", "custom") else "download")
 
 
 def run_one(symbol: str, run_id: int | None = None) -> int:
@@ -222,3 +222,52 @@ def retry_failed(run_id: int) -> int:
         cost = _council_stage(conn, run_id, rows, st)
         _run_set(conn, run_id, cost_usd=(conn.execute("SELECT cost_usd FROM runs WHERE id=?", (run_id,)).fetchone()[0] or 0) + cost)
     return len(rows)
+
+
+def run_custom(run_id: int, items: list[dict]) -> int:
+    """The council on stocks picked by hand (e.g. from the Screener)."""
+    conn = db()
+    st = get_settings(conn)
+    try:
+        cost = _council_stage(conn, run_id, items, st)
+        _run_set(conn, run_id, status="done", stage="done", finished=_now(), cost_usd=cost)
+    except Exception as e:
+        _run_set(conn, run_id, status="failed", stage="done", finished=_now(), error=str(e)[:500])
+        raise
+    return run_id
+
+
+SCREEN_HITS = """
+CREATE TABLE IF NOT EXISTS screen_hits (
+    screen_id TEXT NOT NULL, day TEXT NOT NULL, isin TEXT NOT NULL, symbol TEXT, name TEXT,
+    PRIMARY KEY (screen_id, day, isin)
+);
+"""
+
+
+def run_saved_screens() -> dict:
+    """Evening: run every saved screen marked 'daily' and keep its matches (no AI, no cost)."""
+    from .universe import run_rules
+    conn = db()
+    ensure_schema(conn, "screen_hits", SCREEN_HITS)
+    screens = [s for s in (get_settings(conn).get("screens") or []) if s.get("daily")]
+    out = {}
+    for s in screens:
+        res = run_rules(s["rules"], conn)
+        with _lock:
+            conn.executemany("INSERT OR REPLACE INTO screen_hits VALUES (?,?,?,?,?)",
+                             [(s["id"], res["day"], h["isin"], h.get("symbol"), h.get("name")) for h in res["hits"]])
+            conn.commit()
+        out[s["name"]] = len(res["hits"])
+    return out
+
+
+def saved_screen_history(conn, screen_id: str) -> dict:
+    ensure_schema(conn, "screen_hits", SCREEN_HITS)
+    days = [r[0] for r in conn.execute(
+        "SELECT DISTINCT day FROM screen_hits WHERE screen_id=? ORDER BY day DESC LIMIT 2", (screen_id,))]
+    if not days:
+        return {}
+    now = {r[0] for r in conn.execute("SELECT isin FROM screen_hits WHERE screen_id=? AND day=?", (screen_id, days[0]))}
+    before = {r[0] for r in conn.execute("SELECT isin FROM screen_hits WHERE screen_id=? AND day=?", (screen_id, days[1]))} if len(days) > 1 else set()
+    return {"day": days[0], "count": len(now), "new": sorted(now - before) if before else []}

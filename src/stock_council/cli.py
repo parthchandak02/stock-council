@@ -5,6 +5,7 @@
   stock-council sheet SYMBOL      print one fact sheet
   stock-council analyse SYMBOL    fact sheet + council for one stock (saved)
   stock-council daily [--no-email] the evening job: update, screen, council, email
+  stock-council universe          refresh Screener fundamentals (oldest first)
   stock-council retry RUN_ID      re-run the stocks of a run that failed
   stock-council email RUN_ID      (re)send the email for a run
   stock-council serve             the website on 127.0.0.1:8306
@@ -44,6 +45,8 @@ def main() -> None:
     d.add_argument("--no-email", action="store_true")
     d.add_argument("--max", type=int, default=20)
     d.add_argument("--require-today", action="store_true", help="skip quietly if today's files are not out")
+    uv = sub.add_parser("universe", help="refresh Screener fundamentals (oldest first)")
+    uv.add_argument("--limit", type=int, default=None)
     rt = sub.add_parser("retry", help="re-run failed stocks of a run")
     rt.add_argument("run_id", type=int)
     e = sub.add_parser("email")
@@ -77,6 +80,16 @@ def main() -> None:
         if not a.no_email and os.environ.get("SC_EMAIL_TO"):
             send_run_email(run_id)
             print("emailed")
+        try:
+            from .daily import run_saved_screens
+            from .universe import refresh
+            print("universe", refresh(limit=600))
+            print("saved screens", run_saved_screens())
+        except Exception as e:
+            logging.exception("screener upkeep failed: %s", e)
+    elif a.cmd == "universe":
+        from .universe import refresh
+        print(refresh(limit=a.limit))
     elif a.cmd == "retry":
         from .daily import retry_failed
         print("retried", retry_failed(a.run_id))

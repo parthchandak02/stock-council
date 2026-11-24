@@ -18,7 +18,10 @@ from fastapi.templating import Jinja2Templates
 
 from ..config import DEFAULT_FILTERS
 from ..council import COUNCIL, DEFAULT_PROMPT, VOTE_GROUP
-from ..daily import db, run_one, run_screen_job, start_run
+import uuid
+
+from ..daily import db, run_custom, run_one, run_screen_job, saved_screen_history, start_run
+from ..universe import METRICS, PRESETS, run_rules
 from ..settings import get_settings, save_setting
 from .view import FILTER_LABELS, key_numbers, nice_name, short_fail, short_name, why
 
@@ -53,6 +56,18 @@ MANIFEST = {
               {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
               {"src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
 }
+
+
+@app.on_event("startup")
+def _warm():
+    """Compute the Screener's price metrics in the background so the first visit is instant."""
+    def go():
+        try:
+            from ..universe import price_metrics
+            price_metrics(db())
+        except Exception:
+            pass
+    threading.Thread(target=go, daemon=True).start()
 
 
 @app.get("/manifest.webmanifest")
@@ -242,6 +257,87 @@ async def save_settings(request: Request):
                 models.append({"name": name, "model": model})
     save_setting(conn, "models", models or COUNCIL)
     return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+# ---------- screener ----------
+
+def _rules_from(params) -> list:
+    ms, os_, vs = params.getlist("m"), params.getlist("o"), params.getlist("v")
+    rules = []
+    for m, o, v in zip(ms, os_, vs):
+        try:
+            if m in METRICS and o in (">", "<") and v.strip() != "":
+                rules.append([m, o, float(v)])
+        except ValueError:
+            pass
+    return rules
+
+
+DEFAULT_COLS = ["price", "change_1d", "mcap", "pe", "roe", "de", "spike_x", "delivery"]
+
+
+@app.get("/screener", response_class=HTMLResponse)
+def screener(request: Request):
+    conn = db()
+    st = get_settings(conn)
+    q = request.query_params
+    saved = st.get("screens") or []
+    active = None
+    if q.get("preset"):
+        active = next((p for p in PRESETS if p["id"] == q["preset"]), None)
+        rules = active["rules"] if active else []
+    elif q.get("s"):
+        active = next((s for s in saved if s["id"] == q["s"]), None)
+        rules = active["rules"] if active else []
+    else:
+        rules = _rules_from(q)
+    if not rules and not q:
+        active, rules = PRESETS[0], PRESETS[0]["rules"]
+    res = run_rules(rules, conn) if rules else None
+    cols = DEFAULT_COLS + [k for k, _, _ in rules if k not in DEFAULT_COLS]
+    for s in saved:
+        s["last"] = saved_screen_history(conn, s["id"])
+    return tpl.TemplateResponse(request, "screener.html", {
+        "rules": rules, "res": res, "cols": cols, "metrics": METRICS, "presets": PRESETS,
+        "saved": saved, "active": active, "nav": "screener"})
+
+
+@app.post("/screener/save")
+async def screener_save(request: Request):
+    form = await request.form()
+    rules = _rules_from(form)
+    name = (form.get("name") or "").strip()[:60]
+    if not rules or not name:
+        return RedirectResponse("/screener", status_code=303)
+    conn = db()
+    screens = get_settings(conn).get("screens") or []
+    sid = uuid.uuid4().hex[:8]
+    screens.append({"id": sid, "name": name, "rules": rules, "daily": form.get("daily") == "1"})
+    save_setting(conn, "screens", screens)
+    return RedirectResponse(f"/screener?s={sid}", status_code=303)
+
+
+@app.post("/screener/delete")
+def screener_delete(sid: str = Form(...)):
+    conn = db()
+    save_setting(conn, "screens", [s for s in get_settings(conn).get("screens") or [] if s["id"] != sid])
+    return RedirectResponse("/screener", status_code=303)
+
+
+@app.post("/council")
+async def council_batch(request: Request):
+    form = await request.form()
+    picks = [x.split("|", 1) for x in form.getlist("pick") if "|" in x][:10]
+    if not picks:
+        return RedirectResponse("/screener", status_code=303)
+    if len(picks) == 1:
+        run_id = start_run("on_demand")
+        threading.Thread(target=_quiet, args=(run_one, picks[0][1], run_id), daemon=True).start()
+    else:
+        run_id = start_run("custom")
+        items = [{"isin": i, "symbol": s, "name": s} for i, s in picks]
+        threading.Thread(target=_quiet, args=(run_custom, run_id, items), daemon=True).start()
+    return RedirectResponse(f"/run/{run_id}", status_code=303)
 
 
 @app.get("/healthz")

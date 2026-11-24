@@ -8,7 +8,7 @@
 <li><a class="row" href="/run/{{ r.id }}">
   <span class="kind">{{ icon('volume' if r.kind != 'on_demand' else 'search', 18) }}</span>
   <span class="who">
-    {% if r.kind == 'on_demand' %}<b>{{ ((r.pick or {}).name or 'Stock check')|nice }}</b>{% else %}<b>Screen{{ ' (manual)' if r.kind == 'manual' }}</b>{% endif %}
+    {% if r.kind == 'on_demand' %}<b>{{ ((r.pick or {}).name or 'Stock check')|nice }}</b>{% elif r.kind == 'custom' %}<b>Council on {{ r.n }} picks</b>{% else %}<b>Screen{{ ' (manual)' if r.kind == 'manual' }}</b>{% endif %}
     <span class="muted">{{ r.day|day }}{% if r.kind != 'on_demand' %} · {{ r.n }} stocks{% endif %}{% if r.cost_usd %} · ${{ '%.2f'|format(r.cost_usd) }}{% endif %}</span>
   </span>
   <span class="vote">

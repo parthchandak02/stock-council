@@ -17,6 +17,7 @@ def get_settings(conn) -> dict:
         "filters": {**DEFAULT_FILTERS, **rows.get("filters", {})},
         "prompt": rows.get("prompt") or DEFAULT_PROMPT,
         "models": rows.get("models") or COUNCIL,
+        "screens": rows.get("screens") or [],
     }
 
 

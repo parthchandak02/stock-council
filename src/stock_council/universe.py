@@ -149,7 +149,18 @@ def refresh(limit: int | None = None, max_age_days: int = 7, workers: int = 3) -
     return stats
 
 
+_pm_cache: dict = {}
+
+
 def price_metrics(conn) -> tuple[str, pd.DataFrame]:
+    """Cached per trading day: the heavy part (a year of NSE+BSE rows) is done once a day."""
+    latest = conn.execute("SELECT max(date) FROM daily").fetchone()[0]
+    if _pm_cache.get("day") != latest:
+        _pm_cache.update(day=latest, val=_price_metrics(conn))
+    return _pm_cache["val"]
+
+
+def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
     dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM daily WHERE exch='NSE' ORDER BY date DESC LIMIT 252")]
     df = pd.read_sql_query(
         "SELECT date, isin, SUM(volume) vol, SUM(turnover) t, SUM(deliv_qty) dq, "

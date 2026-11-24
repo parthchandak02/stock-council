@@ -1,0 +1,63 @@
+{% extends "base.html" %}{% from "_ui.html" import icon, change %}
+{% block title %}Screener · Stock Council{% endblock %}
+{% macro fmt(k, x) -%}
+{%- if x is none or x != x %}–{% elif k in ('mcap', 'turnover_cr', 'fcf') %}{{ '{:,.0f}'.format(x) }}{% elif k == 'volume' %}{{ '{:,.0f}'.format(x) }}{% elif k == 'price' %}₹{{ '{:,.2f}'.format(x) if x < 1000 else '{:,.0f}'.format(x) }}{% elif k == 'spike_x' %}{{ '%.1f'|format(x) }}×{% elif k in ('de', 'pb', 'peg') %}{{ '%.2f'|format(x) }}{% elif k == 'fcf_neg_years' %}{{ x|int }}{% else %}{{ '%.1f'|format(x) }}{% endif -%}
+{%- endmacro %}
+{% block main %}
+<section class="head"><div><p class="eyebrow">Screener</p><h1>Find stocks with your own rules</h1></div></section>
+{% if res %}<p class="muted lead">Searching <b>{{ res.universe|num }}</b> actively traded companies with prices from {{ res.day|day }}.</p>{% endif %}
+
+<div class="presets" role="list">
+  {% for p in presets %}<a role="listitem" class="preset {{ 'on' if active and active.id == p.id }}" href="/screener?preset={{ p.id }}"><b>{{ p.name }}</b><span>{{ p.desc }}</span></a>{% endfor %}
+  {% for s in saved %}<a role="listitem" class="preset saved {{ 'on' if active and active.id == s.id }}" href="/screener?s={{ s.id }}"><b>{{ icon('save', 13) }} {{ s.name }}</b><span>{% if s.last %}{{ s.last.count }} last night{% if s.last.new %} · {{ s.last.new|length }} new{% endif %}{% elif s.daily %}checked every evening{% else %}saved{% endif %}</span></a>{% endfor %}
+</div>
+
+<form class="rules card" method="get" action="/screener" id="rules">
+  <div id="rulelist">
+  {% for k, o, v in rules %}{% include "_rule.html" %}{% endfor %}
+  </div>
+  <template id="ruletpl">{% with k='roe', o='>', v='' %}{% include "_rule.html" %}{% endwith %}</template>
+  <div class="rule-actions">
+    <button type="button" class="btn ghost" id="addrule">{{ icon('plus', 16) }}Add rule</button>
+    <button class="btn">{{ icon('filter', 16) }}Screen</button>
+  </div>
+</form>
+
+{% if res %}
+<form method="post" action="/council" id="pickform">
+<div class="reshead">
+  <h2 class="sub">{{ res.hits|length }} match{{ 'es' if res.hits|length != 1 }}</h2>
+  <button class="btn" id="askbtn" disabled>{{ icon('council', 16) }}<span>Ask the council</span></button>
+</div>
+<p class="muted small pickhint">Tick up to 10 stocks to send them to the council (about $0.06 each).</p>
+{% if res.hits %}
+<div class="tblwrap card"><table class="tbl results" id="results">
+  <thead><tr><th class="ck"></th><th data-k="name">Stock</th>
+  {% for k in cols %}<th data-k="{{ k }}" title="{{ metrics[k][3] }}">{{ metrics[k][0] }}{% if metrics[k][2] and metrics[k][2] not in ('₹',) %} <span class="u">{{ metrics[k][2] }}</span>{% endif %}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for h in res.hits %}
+  <tr><td class="ck"><input type="checkbox" name="pick" value="{{ h.isin }}|{{ h.symbol }}" aria-label="Pick {{ h.symbol }}"></td>
+    <td data-v="{{ (h.name or h.symbol)|nice }}"><b>{{ (h.name or h.symbol)|nice }}</b><span class="muted sym">{{ h.symbol }}{% if h.sector %} · {{ h.sector }}{% endif %}</span></td>
+    {% for k in cols %}{% set x = h[k] %}<td data-v="{{ x if x is not none and x == x else '' }}" class="{{ 'pos' if k in ('change_1d','ret_1w','ret_1m','ret_1y') and x and x > 0 else 'neg' if k in ('change_1d','ret_1w','ret_1m','ret_1y') and x and x < 0 }}">{{ fmt(k, x) }}</td>{% endfor %}
+  </tr>{% endfor %}
+  </tbody>
+</table></div>
+{% else %}<div class="empty card small">Nothing matches every rule. Try loosening one.</div>{% endif %}
+</form>
+
+<details class="fold card" id="savebox">
+  <summary>{{ icon('save', 18) }}<b>Save this screen</b><span class="muted small">and check it every evening</span>{{ icon('chevdown', 16, 'tw') }}</summary>
+  <form method="post" action="/screener/save" class="saveform">
+    {% for k, o, v in rules %}<input type="hidden" name="m" value="{{ k }}"><input type="hidden" name="o" value="{{ o }}"><input type="hidden" name="v" value="{{ v }}">{% endfor %}
+    <input name="name" placeholder="Name, e.g. Cheap quality" required maxlength="60">
+    <label class="check"><input type="checkbox" name="daily" value="1" checked> Check every evening</label>
+    <button class="btn">{{ icon('save', 16) }}Save</button>
+  </form>
+  {% if active and active.id in saved|map(attribute='id')|list %}
+  <form method="post" action="/screener/delete" class="saveform"><input type="hidden" name="sid" value="{{ active.id }}"><button class="btn ghost">{{ icon('trash', 16) }}Delete "{{ active.name }}"</button></form>
+  {% endif %}
+</details>
+<p class="muted small">Fundamentals: {{ res.fund_count|num }} companies, refreshed on a rolling weekly cycle (newest {{ res.fund_updated|day }}). Prices, volume and delivery: every trading evening.</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="/static/screener.js?v=1"></script>{% endblock %}

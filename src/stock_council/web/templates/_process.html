@@ -10,7 +10,7 @@
 {% if run.status == 'failed' %}<div class="note bad">{{ icon('alert', 16) }}<span>Stopped: {{ (run.error or 'unknown error')[:200] }}</span></div>{% endif %}
 
 <ol class="steps">
-{% if run.kind != 'on_demand' %}
+{% if run.kind in ('daily', 'manual') %}
   <li class="step {{ state(0) }}">{{ mark(0, 'download') }}
     <div><h3>Collect the day's trading</h3>
     <p class="muted">Closing price, volume and delivery for every company on NSE and BSE.</p>

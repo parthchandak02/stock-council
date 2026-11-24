@@ -504,6 +504,18 @@ def screener_csv(request: Request):
                     headers={"content-disposition": f'attachment; filename="screen-{res["day"]}.csv"'})
 
 
+@app.get("/holdings/{symbol}")
+def holdings_api(symbol: str, bse: str = ""):
+    """12 quarters of shareholding with named holders (India). JSON for the stock page's chart/table."""
+    if IS_US:
+        return JSONResponse({"quarters": []})
+    from ..holdings import history
+    try:
+        return JSONResponse({"quarters": history(symbol.upper(), bse or None)})
+    except Exception as e:
+        return JSONResponse({"quarters": [], "error": str(e)[:200]}, status_code=502)
+
+
 @app.get("/healthz")
 def healthz():
     return {"ok": True}

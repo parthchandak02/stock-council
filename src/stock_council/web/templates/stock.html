@@ -79,6 +79,15 @@
   <p class="muted small chart-legend"><i class="spk-dot"></i> volume over 4× normal{% if chart.mark %} · <i class="mk-dot"></i> day of this call{% endif %}</p>
 </div>
 {% endif %}
+{% if not IS_US and p.status == 'done' %}
+<section class="holdings card" id="holdings" data-symbol="{{ p.symbol }}" data-bse="{{ s.bse_code or '' }}">
+  <div class="hd-top">
+    <h2 class="sub">{{ icon('council', 18) }}Who owns it <span class="muted small">quarterly filings</span></h2>
+    <div class="seg" role="tablist"><button type="button" data-view="chart" class="on">Graph</button><button type="button" data-view="table">Table</button></div>
+  </div>
+  <div class="hd-body"><p class="muted small loading">{{ icon('spin', 14, 'spin') }} Reading 12 quarters of shareholding filings…</p></div>
+</section>
+{% endif %}
 <h2 class="sub">{{ icon('shield', 18) }}The numbers <span class="muted small">from filings, not AI</span></h2>
 <div class="nums">
 {% for n in nums %}
@@ -124,4 +133,4 @@
 </details>
 </div>
 {% endblock %}
-{% block scripts %}<script src="/static/live.js?v=2"></script><script src="/static/order.js?v=2"></script>{% endblock %}
+{% block scripts %}<script src="/static/live.js?v=2"></script><script src="/static/order.js?v=2"></script><script src="/static/holdings.js?v=3"></script>{% endblock %}

@@ -23,6 +23,7 @@ class ScreenResult:
     date: str
     filters: dict
     spikes: int
+    companies: int = 0
     passed: list[dict] = field(default_factory=list)
     rejected: list[dict] = field(default_factory=list)
 
@@ -54,7 +55,7 @@ def volume_spikes(conn, filters: dict) -> tuple[str, pd.DataFrame]:
     hits = stats[(stats["vol_today"] > filters["min_volume"])
                  & (stats["vol_1w_avg"] > filters["volume_spike_multiple"] * stats["vol_1y_avg"])
                  & (stats["days"] >= 20)]
-    return today, hits.sort_values("spike_x", ascending=False)
+    return today, hits.sort_values("spike_x", ascending=False), len(stats)
 
 
 def identity(conn, isin: str, day: str) -> dict:
@@ -114,11 +115,14 @@ def check(f: dict, filters: dict) -> list[str]:
     return fails
 
 
-def run_screen(filters: dict | None = None) -> ScreenResult:
+def run_screen(filters: dict | None = None, on_progress=None) -> ScreenResult:
+    """on_progress(result) is called after the volume scan and after every fundamentals check."""
     filters = {**DEFAULT_FILTERS, **(filters or {})}
     conn = connect()
-    day, hits = volume_spikes(conn, filters)
-    res = ScreenResult(date=day, filters=filters, spikes=len(hits))
+    day, hits, companies = volume_spikes(conn, filters)
+    res = ScreenResult(date=day, filters=filters, spikes=len(hits), companies=companies)
+    if on_progress:
+        on_progress(res)
     for isin, h in hits.iterrows():
         ident = identity(conn, isin, day)
         ident.update(vol_1w_avg=int(h["vol_1w_avg"]), vol_1y_avg=int(h["vol_1y_avg"]),
@@ -127,12 +131,16 @@ def run_screen(filters: dict | None = None) -> ScreenResult:
             f = get_fundamentals(conn, ident)
         except Exception as e:
             log.warning("%s: no fundamentals (%s)", ident["yahoo_symbol"], e)
-            res.rejected.append({**ident, "fails": [f"no fundamentals: {e}"]})
+            res.rejected.append({**ident, "fails": ["no financials published"]})
+            if on_progress:
+                on_progress(res)
             continue
         row = {**ident, **{k: f.get(k) for k in (
             "market_cap_cr", "pe", "pb", "roe_pct", "roce_pct", "debt_to_equity", "sales_cagr_3y_pct")}}
         fails = check(f, filters)
         (res.rejected if fails else res.passed).append({**row, "fails": fails})
+        if on_progress:
+            on_progress(res)
     res.passed.sort(key=lambda r: -r["spike_x"])
     return res
 

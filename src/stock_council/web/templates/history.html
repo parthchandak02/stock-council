@@ -1,6 +1,24 @@
-{% extends "base.html" %}{% block main %}
-<h1>History</h1><p class="mute small">Every run is kept, so we can later check which calls were right.</p>
-<div class="card"><table><tr><th>Day</th><th>Type</th><th class="num">Stocks</th><th class="num hide-sm">Cost</th><th>Status</th></tr>
-{% for r in runs %}<tr class="row"><td><a href="{{ '/day/' ~ r.id if r.kind=='daily' else '/run/' ~ r.id }}">{{ r.day }}</a></td><td>{{ 'Screen' if r.kind=='daily' else 'One stock' }}</td>
-<td class="num">{{ r.n }}</td><td class="num hide-sm">${{ '%.2f'|format(r.cost_usd or 0) }}</td><td class="small {{ 'SELL' if r.status=='failed' }}">{{ r.status }}</td></tr>{% endfor %}
-</table></div>{% endblock %}
+{% extends "base.html" %}{% from "_ui.html" import icon, verdict %}
+{% block title %}History · Stock Council{% endblock %}
+{% block main %}
+<section class="head"><div><p class="eyebrow">History</p><h1>Every run, kept</h1></div></section>
+<p class="muted lead">So we can later check which calls were right.</p>
+<ul class="stocks">
+{% for r in runs %}
+<li><a class="row" href="/run/{{ r.id }}">
+  <span class="kind">{{ icon('volume' if r.kind != 'on_demand' else 'search', 18) }}</span>
+  <span class="who">
+    {% if r.kind == 'on_demand' %}<b>{{ ((r.pick or {}).name or 'Stock check')|nice }}</b>{% else %}<b>Screen{{ ' (manual)' if r.kind == 'manual' }}</b>{% endif %}
+    <span class="muted">{{ r.day|day }}{% if r.kind != 'on_demand' %} · {{ r.n }} stocks{% endif %}{% if r.cost_usd %} · ${{ '%.2f'|format(r.cost_usd) }}{% endif %}</span>
+  </span>
+  <span class="vote">
+    {% if r.status == 'running' %}<span class="chip none">{{ icon('spin', 14, 'spin') }}Running</span>
+    {% elif r.status == 'failed' %}<span class="chip sell">{{ icon('alert', 14) }}Failed</span>
+    {% elif r.kind == 'on_demand' %}{{ verdict((r.pick or {}).verdict) }}
+    {% else %}<span class="tally"><span class="buy">{{ r.buys }} buy</span>{% if r.sells %} · <span class="sell">{{ r.sells }} sell</span>{% endif %}</span>{% endif %}
+  </span>
+  {{ icon('chev', 18, 'chev') }}
+</a></li>
+{% else %}<li class="empty small">Nothing yet.</li>{% endfor %}
+</ul>
+{% endblock %}

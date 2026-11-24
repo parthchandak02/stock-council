@@ -80,6 +80,9 @@ def build(symbol: str, nse: NSE | None = None) -> dict:
                     "pledge": nse.pledge(ident["nse_symbol"])}
             cache_put(conn, key, disc)
         sheet.update(disc)
+        full = next((q.get("company") for q in disc.get("shareholding") or [] if q.get("company")), None)
+        if full:
+            sheet["name"] = full  # exchange files cut names short; the filing has the full name
     return sheet
 
 

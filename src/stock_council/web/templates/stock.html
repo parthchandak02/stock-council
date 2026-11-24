@@ -1,26 +1,65 @@
-{% extends "base.html" %}{% block title %}{{ p.name }} · Stock Council{% endblock %}
-{% block main %}{% set s = p.sheet or {} %}{% set t = s.technicals or {} %}{% set f = s.fundamentals or {} %}{% set v = p.verdict or {} %}
-<p class="small mute"><a href="/day/{{ run.id }}">← {{ run.day }}</a></p>
-<h1>{{ p.name }} <span class="mute small">{{ p.symbol }}</span></h1>
-<div class="kpis">
- <div>{% include "_call.html" %}</div>
- <div><b>₹{{ p.price }}</b><span>{{ s.change_pct }}% today</span></div>
- <div><b>{{ s.spike_x or '-' }}×</b><span>volume spike</span></div>
- <div><b>{{ t.delivery_pct_today or '-' }}%</b><span>delivery (avg {{ t.delivery_pct_30d_avg }}%)</span></div>
- <div><b>{{ v.stop_losses[0] if v.stop_losses else '-' }}–{{ v.stop_losses[-1] if v.stop_losses else '-' }}</b><span>stop-loss range</span></div>
+{% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, agree, change, tone_of %}
+{% block title %}{{ p.name|nice }} · Stock Council{% endblock %}
+{% block main %}{% set s = p.sheet or {} %}{% set t = s.technicals or {} %}{% set v = p.verdict or {} %}
+<a class="back" href="/">{{ icon('back', 16) }}Today</a>
+
+<section class="hero card">
+  <div class="hero-id">
+    <p class="eyebrow">{{ p.symbol }}{% if s.bse_code %} · BSE {{ s.bse_code }}{% endif %} · {{ run.day|day }}</p>
+    <h1>{{ (p.name or p.symbol)|nice }}</h1>
+    <p class="price">{{ p.price|inr }} {{ change(s.change_pct) }}</p>
+  </div>
+  <div class="hero-vote">
+    {{ verdict(v, 'big') }}
+    <p>{{ agree(v) }}</p>
+    {{ dots(p.opinions, big=True) }}
+  </div>
+  <dl class="facts3">
+    <div><dt>Volume vs usual</dt><dd>{{ s.spike_x or '-' }}×</dd></div>
+    <div><dt>Delivered</dt><dd>{{ t.delivery_pct_today|round(0)|int if t.delivery_pct_today is not none else '-' }}%</dd></div>
+    <div><dt>Stop-loss</dt><dd>{% if v.stop_losses %}₹{{ v.stop_losses[0]|round(0)|int }}–{{ v.stop_losses[-1]|round(0)|int }}{% else %}-{% endif %}</dd></div>
+  </dl>
+  {% if why.risk or why.trigger %}
+  <div class="why">
+    {% if why.risk %}<p>{{ icon('alert', 16) }}<span><b>Main risk.</b> {{ why.risk }}</span></p>{% endif %}
+    {% if why.trigger %}<p>{{ icon('target', 16) }}<span><b>Would change view if:</b> {{ why.trigger }}</span></p>{% endif %}
+  </div>{% endif %}
+</section>
+{% if p.error %}<div class="note bad">{{ icon('alert', 16) }}<span>{{ p.error[:300] }}</span></div>{% endif %}
+
+<h2 class="sub">{{ icon('shield', 18) }}The numbers <span class="muted small">from filings, not AI</span></h2>
+<div class="nums">
+{% for n in nums %}
+  <div class="num {{ n.tone }}"><span class="lbl">{{ n.label }}</span><b>{{ n.value }}</b><span class="hint">{{ n.hint }}</span></div>
+{% endfor %}
 </div>
-{% if p.error %}<div class="flash SELL">{{ p.error }}</div>{% endif %}
-<h2>The council</h2>
-<div class="grid">{% for o in p.opinions or [] %}
-<div class="card op"><h3><span>{{ o.name }}</span>{% if o.error %}<span class="mute small">no answer</span>{% else %}<span class="call {{ group(o.verdict) }}">{{ o.verdict }} · {{ o.score }}</span>{% endif %}</h3>
-{% if o.error %}<p class="small mute">{{ o.error[:160] }}</p>{% else %}
-<div class="small mute">{% if o.stop_loss %}Stop ₹{{ o.stop_loss }}{% endif %}{% if o.entry_zone %} · Entry {{ o.entry_zone }}{% endif %}</div>
-<ol>{% for l in o.lines %}<li>{{ l }}</li>{% endfor %}</ol>
-{% if o.trigger_to_change_view %}<p class="small"><b>Would change view if:</b> {{ o.trigger_to_change_view }}</p>{% endif %}{% endif %}
-</div>{% endfor %}</div>
-<h2>News</h2>
-<div class="card small">{{ (p.news or {}).text | md | safe }}</div>
-<h2>Fact sheet</h2>
-<div class="card sheet scroll">{{ p.sheet_md | md | safe }}</div>
-<p class="small mute">Facts: NSE/BSE daily files and filings, company financials. Opinions: AI models via OpenRouter. Not investment advice.</p>
+
+<h2 class="sub">{{ icon('council', 18) }}What each AI said</h2>
+<div class="ais">
+{% for o in p.opinions or [] %}
+<details class="ai">
+  <summary>
+    <span class="dot {{ 'err' if o.error else tone_of(o.verdict) }}">{{ short_name(o.name) }}</span>
+    <b>{{ o.name }}</b>
+    {% if o.error %}<span class="muted">no answer</span>{% else %}
+    <span class="v {{ tone_of(o.verdict) }}">{{ o.verdict }}</span><span class="sc">{{ o.score }}</span>{% endif %}
+    {{ icon('chevdown', 16, 'tw') }}
+  </summary>
+  {% if not o.error %}
+  <div class="ai-body">
+    {% if o.stop_loss or o.entry_zone %}<p class="muted small">{% if o.entry_zone %}Entry {{ o.entry_zone }}{% endif %}{% if o.stop_loss %}{{ ' · ' if o.entry_zone }}Stop ₹{{ o.stop_loss }}{% endif %}</p>{% endif %}
+    <ol>{% for l in o.lines %}<li>{{ l }}</li>{% endfor %}</ol>
+  </div>{% endif %}
+</details>
+{% endfor %}
+</div>
+
+<details class="fold card">
+  <summary>{{ icon('news', 18) }}<b>News the AIs read</b>{{ icon('chevdown', 16, 'tw') }}</summary>
+  <div class="md small">{{ (p.news or {}).text | md | safe }}</div>
+</details>
+<details class="fold card">
+  <summary>{{ icon('file', 18) }}<b>Full fact sheet</b>{{ icon('chevdown', 16, 'tw') }}</summary>
+  <div class="md sheet small">{{ p.sheet_md | md | safe }}</div>
+</details>
 {% endblock %}

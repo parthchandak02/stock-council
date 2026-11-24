@@ -168,10 +168,20 @@ def tally(opinions: list[dict]) -> dict:
     }
 
 
-def run(sheet: dict, sheet_md: str, prompt: str = DEFAULT_PROMPT, members=COUNCIL) -> dict:
+def run(sheet: dict, sheet_md: str, prompt: str = DEFAULT_PROMPT, members=COUNCIL,
+        on_news=None, on_opinion=None) -> dict:
+    """All members answer at the same time; on_opinion(list_so_far) fires as each one lands."""
     news = news_digest(sheet["name"], sheet.get("nse_symbol") or sheet.get("bse_symbol"))
+    if on_news:
+        on_news(news)
+    slots: list[dict] = [{"name": m["name"], "model": m["model"], "pending": True} for m in members]
     with cf.ThreadPoolExecutor(max_workers=len(members)) as ex:
-        opinions = list(ex.map(lambda m: ask_member(m, prompt, sheet_md, news["text"]), members))
+        futs = {ex.submit(ask_member, m, prompt, sheet_md, news["text"]): i for i, m in enumerate(members)}
+        for fut in cf.as_completed(futs):
+            slots[futs[fut]] = fut.result()
+            if on_opinion:
+                on_opinion(list(slots))
+    opinions = slots
     costs = [o.get("cost") or 0 for o in opinions] + [news.get("cost") or 0]
     return {"news": news, "opinions": opinions, "verdict": tally(opinions),
             "cost_usd": round(sum(costs), 4), "prompt": prompt}

@@ -46,7 +46,7 @@ class NSE:
         rows = self._get_json(f"corporate-share-holdings-master?index=equities&symbol={symbol}")
         out = []
         for row in rows[:quarters]:
-            q = {"quarter": row.get("date"), "promoter": _f(row.get("pr_and_prgrp")),
+            q = {"quarter": row.get("date"), "company": row.get("name"), "promoter": _f(row.get("pr_and_prgrp")),
                  "public": _f(row.get("public_val"))}
             if row.get("xbrl"):
                 time.sleep(1)

@@ -1,15 +1,22 @@
-"""The evening job and on-demand runs. Every result is saved (the track record starts on day one)."""
+"""Runs: the evening screen, a screen started from the site, and one-stock checks.
+
+Every run records its progress as it goes (stage + funnel on the run, status + opinions on each
+stock) so the site can show the whole process live. Stocks are analysed in parallel and the AIs
+on the council answer at the same time. Every result is kept: the track record starts on day one.
+"""
 from __future__ import annotations
 
+import concurrent.futures as cf
 import json
 import logging
+import threading
 from datetime import datetime, timezone
 
 from . import council
 from .exchanges import update
 from .factsheet import build, render_markdown
 from .nse_api import NSE
-from .screen import run_screen
+from .screen import ScreenResult, run_screen, trading_dates
 from .settings import get_settings
 from .store import connect, ensure_schema
 
@@ -17,7 +24,7 @@ log = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
-    id INTEGER PRIMARY KEY, day TEXT NOT NULL, kind TEXT NOT NULL,      -- kind: daily | on_demand
+    id INTEGER PRIMARY KEY, day TEXT NOT NULL, kind TEXT NOT NULL,      -- daily | manual | on_demand
     started TEXT NOT NULL, finished TEXT, status TEXT NOT NULL,         -- running | done | failed
     filters TEXT, prompt TEXT, models TEXT, spikes INTEGER, cost_usd REAL, error TEXT,
     emailed TEXT
@@ -28,11 +35,29 @@ CREATE TABLE IF NOT EXISTS picks (
     PRIMARY KEY (run_id, isin)
 );
 """
+# Columns added after the first release; ALTER TABLE is a no-op error when they exist.
+MIGRATIONS = [
+    "ALTER TABLE runs ADD COLUMN stage TEXT",      # download | scan | filter | council | done
+    "ALTER TABLE runs ADD COLUMN funnel TEXT",     # {companies, spikes, checked, passed[], rejected[]}
+    "ALTER TABLE picks ADD COLUMN status TEXT",    # queued | facts | news | council | done | error
+    "ALTER TABLE picks ADD COLUMN seq INTEGER",
+]
+STAGES = ["download", "scan", "filter", "council", "done"]
+PARALLEL_STOCKS = 4
+_lock = threading.Lock()
 
 
 def db():
     conn = connect()
     ensure_schema(conn, "daily", SCHEMA)
+    if not getattr(db, "_migrated", False):
+        for sql in MIGRATIONS:
+            try:
+                conn.execute(sql)
+            except Exception:
+                pass
+        conn.commit()
+        db._migrated = True
     return conn
 
 
@@ -40,98 +65,160 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _start(conn, day: str, kind: str, st: dict) -> int:
-    cur = conn.execute(
-        "INSERT INTO runs(day, kind, started, status, filters, prompt, models) VALUES (?,?,?,?,?,?,?)",
-        (day, kind, _now(), "running", json.dumps(st["filters"]), st["prompt"], json.dumps(st["models"])))
-    conn.commit()
-    return cur.lastrowid
-
-
-def analyse(conn, run_id: int, symbol: str, st: dict, nse: NSE) -> dict:
-    sheet = build(symbol, nse=nse)
-    md = render_markdown(sheet)
-    res = council.run(sheet, md, prompt=st["prompt"], members=st["models"])
-    conn.execute(
-        "INSERT OR REPLACE INTO picks VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (run_id, sheet["isin"], sheet.get("nse_symbol") or sheet.get("bse_symbol"), sheet["name"],
-         sheet["technicals"]["close"], json.dumps(sheet, default=str), md, json.dumps(res["news"]),
-         json.dumps(res["opinions"]), json.dumps(res["verdict"]), None))
-    conn.commit()
-    return res
+def ist_today() -> str:
+    from .exchanges import ist_today as d
+    return d().isoformat()
 
 
 class NothingToDo(Exception):
     pass
 
 
-def ist_today() -> str:
-    from .exchanges import ist_today as d
-    return d().isoformat()
+def _start(conn, day: str, kind: str, st: dict, stage: str) -> int:
+    cur = conn.execute(
+        "INSERT INTO runs(day, kind, started, status, stage, filters, prompt, models) VALUES (?,?,?,?,?,?,?,?)",
+        (day, kind, _now(), "running", stage, json.dumps(st["filters"]), st["prompt"], json.dumps(st["models"])))
+    conn.commit()
+    return cur.lastrowid
 
 
-def run_daily(max_stocks: int = 20, require_today: bool = False) -> int:
-    """The evening job. With require_today it is safe to schedule twice an evening: it does nothing
-    if today's exchange files are not out yet (or it is a holiday), or if today already ran."""
+def _run_set(conn, run_id: int, **kw) -> None:
+    cols = ", ".join(f"{k}=?" for k in kw)
+    vals = [json.dumps(v, default=str) if isinstance(v, (dict, list)) else v for v in kw.values()]
+    with _lock:
+        conn.execute(f"UPDATE runs SET {cols} WHERE id=?", (*vals, run_id))
+        conn.commit()
+
+
+def _pick_set(conn, run_id: int, isin: str, **kw) -> None:
+    cols = ", ".join(f"{k}=?" for k in kw)
+    vals = [json.dumps(v, default=str) if isinstance(v, (dict, list)) else v for v in kw.values()]
+    with _lock:
+        conn.execute(f"UPDATE picks SET {cols} WHERE run_id=? AND isin=?", (*vals, run_id, isin))
+        conn.commit()
+
+
+def _funnel(res: ScreenResult) -> dict:
+    slim = lambda r: {k: r.get(k) for k in ("isin", "nse_symbol", "bse_symbol", "name", "close", "change_pct",
+                                             "spike_x", "delivery_pct", "market_cap_cr", "pe", "roe_pct",
+                                             "debt_to_equity", "fails")}
+    return {"companies": res.companies, "spikes": res.spikes,
+            "checked": len(res.passed) + len(res.rejected),
+            "passed": [slim(r) for r in res.passed], "rejected": [slim(r) for r in res.rejected]}
+
+
+def analyse(run_id: int, isin: str, symbol: str, st: dict) -> float:
+    """Fact sheet, shared news, then the whole council at once. Saves each step as it lands."""
+    conn = db()
+    try:
+        _pick_set(conn, run_id, isin, status="facts")
+        sheet = build(symbol, nse=NSE())
+        md = render_markdown(sheet)
+        _pick_set(conn, run_id, isin, status="news", name=sheet["name"], price=sheet["technicals"]["close"],
+                  sheet=sheet, sheet_md=md)
+        res = council.run(
+            sheet, md, prompt=st["prompt"], members=st["models"],
+            on_news=lambda n: _pick_set(conn, run_id, isin, status="council", news=n),
+            on_opinion=lambda ops: _pick_set(conn, run_id, isin, opinions=ops, verdict=council.tally(
+                [o for o in ops if not o.get("pending")])))
+        _pick_set(conn, run_id, isin, status="done", opinions=res["opinions"], verdict=res["verdict"], error=None)
+        return res["cost_usd"]
+    except Exception as e:
+        log.exception("%s failed", symbol)
+        _pick_set(conn, run_id, isin, status="error", error=str(e)[:500])
+        return 0.0
+
+
+def _council_stage(conn, run_id: int, rows: list[dict], st: dict) -> float:
+    with _lock:
+        for i, r in enumerate(rows):
+            conn.execute(
+                "INSERT OR REPLACE INTO picks(run_id, isin, symbol, name, price, status, seq) VALUES (?,?,?,?,?,?,?)",
+                (run_id, r["isin"], r["symbol"], r.get("name"), r.get("close"), "queued", i))
+        conn.commit()
+    with cf.ThreadPoolExecutor(max_workers=PARALLEL_STOCKS) as ex:
+        costs = list(ex.map(lambda r: analyse(run_id, r["isin"], r["symbol"], st), rows))
+    return round(sum(costs), 4)
+
+
+def run_screen_job(kind: str = "daily", max_stocks: int = 20, require_today: bool = False,
+                   run_id: int | None = None) -> int:
+    """The whole screen: download → volume scan → fundamentals → council.
+
+    kind 'daily' (timer) skips if today's files are not out or today already ran; 'manual' (the
+    site's button) always runs. Pass run_id to continue a run row created by the site."""
     conn = db()
     st = get_settings(conn)
-    update(history_days=10)
-    from .screen import trading_dates
-    latest = trading_dates(conn, 1)[0]
-    if require_today and latest != ist_today():
-        raise NothingToDo(f"no exchange data for {ist_today()} yet (latest {latest})")
-    if conn.execute("SELECT 1 FROM runs WHERE kind='daily' AND day=? AND status='done'", (latest,)).fetchone():
-        raise NothingToDo(f"daily run for {latest} already done")
-    screen = run_screen(st["filters"])
-    run_id = _start(conn, screen.date, "daily", st)
-    conn.execute("UPDATE runs SET spikes=? WHERE id=?", (screen.spikes, run_id))
-    nse, cost = NSE(), 0.0
+    if run_id is None:
+        run_id = _start(conn, ist_today(), kind, st, "download")
     try:
-        for row in screen.passed[:max_stocks]:
-            sym = row["nse_symbol"] or row["bse_code"]
-            try:
-                cost += analyse(conn, run_id, sym, st, nse)["cost_usd"]
-            except Exception as e:
-                log.exception("%s failed", sym)
-                conn.execute("INSERT OR REPLACE INTO picks(run_id, isin, symbol, name, price, error) VALUES (?,?,?,?,?,?)",
-                             (run_id, row["isin"], sym, row["name"], row["close"], str(e)[:500]))
-                conn.commit()
-        conn.execute("UPDATE runs SET status='done', finished=?, cost_usd=? WHERE id=?", (_now(), round(cost, 4), run_id))
-    except Exception as e:
-        conn.execute("UPDATE runs SET status='failed', finished=?, error=? WHERE id=?", (_now(), str(e)[:500], run_id))
+        update(history_days=10)
+        latest = trading_dates(conn, 1)[0]
+        if require_today and latest != ist_today():
+            raise NothingToDo(f"no exchange data for {ist_today()} yet (latest {latest})")
+        if kind == "daily" and conn.execute(
+                "SELECT 1 FROM runs WHERE kind='daily' AND day=? AND status='done' AND id!=?", (latest, run_id)).fetchone():
+            raise NothingToDo(f"daily run for {latest} already done")
+        _run_set(conn, run_id, day=latest, stage="scan")
+
+        def progress(res: ScreenResult):
+            _run_set(conn, run_id, stage="filter", spikes=res.spikes, funnel=_funnel(res))
+
+        res = run_screen(st["filters"], on_progress=progress)
+        _run_set(conn, run_id, stage="council", spikes=res.spikes, funnel=_funnel(res))
+        rows = [{**r, "symbol": r["nse_symbol"] or r["bse_code"]} for r in res.passed[:max_stocks]]
+        cost = _council_stage(conn, run_id, rows, st)
+        _run_set(conn, run_id, status="done", stage="done", finished=_now(), cost_usd=cost)
+    except NothingToDo:
+        with _lock:
+            conn.execute("DELETE FROM runs WHERE id=?", (run_id,))
+            conn.commit()
         raise
-    finally:
-        conn.commit()
+    except Exception as e:
+        _run_set(conn, run_id, status="failed", finished=_now(), error=str(e)[:500])
+        raise
     return run_id
 
 
-def run_one(symbol: str) -> int:
+def run_daily(max_stocks: int = 20, require_today: bool = False) -> int:
+    return run_screen_job("daily", max_stocks, require_today)
+
+
+def start_run(kind: str, symbol: str | None = None) -> int:
+    """Create the run row now (so the site can show it at once); the caller runs it in a thread."""
     conn = db()
     st = get_settings(conn)
-    from .screen import trading_dates
-    run_id = _start(conn, trading_dates(conn, 1)[0], "on_demand", st)
+    day = trading_dates(conn, 1)[0] if kind == "on_demand" else ist_today()
+    return _start(conn, day, kind, st, "council" if kind == "on_demand" else "download")
+
+
+def run_one(symbol: str, run_id: int | None = None) -> int:
+    conn = db()
+    st = get_settings(conn)
+    if run_id is None:
+        run_id = _start(conn, trading_dates(conn, 1)[0], "on_demand", st, "council")
+    symbol = symbol.upper()
     try:
-        res = analyse(conn, run_id, symbol.upper(), st, NSE())
-        conn.execute("UPDATE runs SET status='done', finished=?, cost_usd=? WHERE id=?", (_now(), res["cost_usd"], run_id))
+        from .factsheet import _isin_for
+        isin = _isin_for(conn, symbol)
+        cost = _council_stage(conn, run_id, [{"isin": isin, "symbol": symbol, "name": symbol}], st)
+        failed = conn.execute("SELECT error FROM picks WHERE run_id=? AND status='error'", (run_id,)).fetchone()
+        if failed:
+            raise RuntimeError(failed["error"])
+        _run_set(conn, run_id, status="done", stage="done", finished=_now(), cost_usd=cost)
     except Exception as e:
-        conn.execute("UPDATE runs SET status='failed', finished=?, error=? WHERE id=?", (_now(), str(e)[:500], run_id))
+        _run_set(conn, run_id, status="failed", stage="done", finished=_now(), error=str(e)[:500])
         raise
-    finally:
-        conn.commit()
     return run_id
 
 
 def retry_failed(run_id: int) -> int:
-    """Re-run the council for stocks of a run that failed (network, lock, model outage)."""
+    """Re-run the stocks of a run that failed (network, lock, model outage)."""
     conn = db()
     st = get_settings(conn)
-    nse, n = NSE(), 0
-    for r in conn.execute("SELECT symbol FROM picks WHERE run_id=? AND error IS NOT NULL", (run_id,)).fetchall():
-        try:
-            res = analyse(conn, run_id, r["symbol"], st, nse)
-            conn.execute("UPDATE runs SET cost_usd=coalesce(cost_usd,0)+? WHERE id=?", (res["cost_usd"], run_id))
-            conn.commit()
-            n += 1
-        except Exception:
-            log.exception("%s failed again", r["symbol"])
-    return n
+    rows = [dict(r) for r in conn.execute(
+        "SELECT isin, symbol FROM picks WHERE run_id=? AND (error IS NOT NULL OR status='error')", (run_id,))]
+    if rows:
+        cost = _council_stage(conn, run_id, rows, st)
+        _run_set(conn, run_id, cost_usd=(conn.execute("SELECT cost_usd FROM runs WHERE id=?", (run_id,)).fetchone()[0] or 0) + cost)
+    return len(rows)

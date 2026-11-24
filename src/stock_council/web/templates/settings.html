@@ -1,15 +1,28 @@
-{% extends "base.html" %}{% block main %}
-<h1>Settings</h1>
-{% if saved %}<div class="flash">Saved. Used from the next run.</div>{% endif %}
-<form method="post" action="/settings">
-<h2>Screen filters</h2><div class="card grid">
-{% for k, label in labels.items() %}<label class="small">{{ label }}<br><input type="number" step="any" name="{{ k }}" value="{{ st.filters[k] }}" style="width:100%"></label>{% endfor %}
-</div>
-<h2>Question for the council</h2>
-<p class="small mute">Every AI gets this plus the same fact sheet and news. Changing it makes new scores less comparable with old ones.</p>
-<textarea name="prompt" rows="14" style="width:100%">{{ st.prompt }}</textarea>
-<h2>Council members</h2>
-<p class="small mute">One per line: Name | OpenRouter model id</p>
-<textarea name="models" rows="8" style="width:100%;font-family:ui-monospace,monospace;font-size:13px">{{ models_text }}</textarea>
-<p><button>Save</button> <button class="ghost" name="reset" value="prompt">Restore original question</button></p>
-</form>{% endblock %}
+{% extends "base.html" %}{% from "_ui.html" import icon %}
+{% block title %}Settings · Stock Council{% endblock %}
+{% block main %}
+<section class="head"><div><p class="eyebrow">Settings</p><h1>Screen and council</h1></div></section>
+{% if saved %}<div class="note good">{{ icon('check', 16) }}<span>Saved. The next run uses it.</span></div>{% endif %}
+<form method="post" action="/settings" class="settings">
+  <h2 class="sub">{{ icon('scale', 18) }}Filters</h2>
+  <div class="fields card">
+  {% for k, pair in FILTER_LABELS.items() %}{% set title, desc = pair %}
+    <label><span><b>{{ title }}</b><span class="muted small">{{ desc.format(v=st.filters[k]) }}</span></span>
+      <input type="number" step="any" name="{{ k }}" value="{{ st.filters[k] }}" inputmode="decimal"></label>
+  {% endfor %}
+  </div>
+
+  <h2 class="sub">{{ icon('council', 18) }}Question for the council</h2>
+  <p class="muted small">Every AI gets this, the fact sheet and the news. Changing it makes new scores less comparable with old ones.</p>
+  <textarea name="prompt" rows="12">{{ st.prompt }}</textarea>
+
+  <details class="fold card">
+    <summary>{{ icon('settings', 18) }}<b>Council members</b><span class="muted small">{{ st.models|length }} AIs</span>{{ icon('chevdown', 16, 'tw') }}</summary>
+    <p class="muted small">One per line: <code>Name | OpenRouter model id</code></p>
+    <textarea name="models" rows="8" class="mono">{{ models_text }}</textarea>
+  </details>
+
+  <div class="actions"><button class="btn">{{ icon('check', 16) }}Save</button>
+  <button class="btn ghost" name="reset" value="prompt">Restore original question</button></div>
+</form>
+{% endblock %}

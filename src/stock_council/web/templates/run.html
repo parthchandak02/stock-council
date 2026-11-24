@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% from "_ui.html" import icon %}
+{% block title %}{{ 'How the list was found' if run.kind != 'on_demand' else 'Checking a stock' }} · Stock Council{% endblock %}
+{% block main %}
+<a class="back" href="/">{{ icon('back', 16) }}Today</a>
+<section class="head">
+  <div>
+    <p class="eyebrow">{{ run.day|day }}{% if run.status == 'running' %} · <span class="livetag"><span class="pulse"></span>live</span>{% endif %}</p>
+    <h1>{{ 'How the list was found' if run.kind != 'on_demand' else 'Asking the council' }}</h1>
+  </div>
+  <a class="howlink" href="/how">{{ icon('how', 16) }}What each step means</a>
+</section>
+<div id="process">{% include "_process.html" %}</div>
+{% endblock %}
+{% block scripts %}{% if run.status == 'running' %}
+<script>
+(function () {
+  const box = document.getElementById('process');
+  async function tick() {
+    try {
+      const r = await fetch('/run/{{ run.id }}/live', {cache: 'no-store'});
+      if (r.ok) {
+        box.innerHTML = await r.text();
+        if (r.headers.get('x-run-status') !== 'running') { setTimeout(() => location.reload(), 800); return; }
+      }
+    } catch (e) {}
+    setTimeout(tick, 2500);
+  }
+  setTimeout(tick, 2500);
+})();
+</script>{% endif %}{% endblock %}

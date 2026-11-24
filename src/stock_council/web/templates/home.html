@@ -1,30 +1,73 @@
-{% extends "base.html" %}
-{% block head %}{% if running %}<meta http-equiv="refresh" content="20">{% endif %}{% endblock %}
+{% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, agree, change %}
 {% block main %}
-{% if request.query_params.get('started') %}<div class="flash">Analysing {{ request.query_params.get('started') }}… about 2–3 minutes. This page refreshes itself.</div>{% endif %}
-{% if not past %}
-<form class="go card" method="post" action="/analyse" style="margin-bottom:18px">
-  <input type="text" name="symbol" placeholder="Any NSE symbol, e.g. GARFIBRES" required style="flex:1;min-width:200px" autocomplete="off">
-  <button>Ask the council</button>
+{% for r in running %}
+<a class="live card" href="/run/{{ r.id }}">
+  <span class="pulse"></span>
+  <span><b>{{ 'Screen running' if r.kind != 'on_demand' else 'Checking a stock' }}</b>
+  <span class="muted">· {{ {'download':'downloading files','scan':'scanning volumes','filter':'checking fundamentals','council':'council is voting'}.get(r.stage, 'working') }}</span></span>
+  <span class="go">Watch {{ icon('chev', 16) }}</span>
+</a>
+{% endfor %}
+
+<form class="ask" method="post" action="/check" autocomplete="off">
+  {{ icon('search', 18) }}
+  <input name="symbol" placeholder="Any NSE symbol, e.g. GARFIBRES" required aria-label="NSE symbol">
+  <button>Ask</button>
 </form>
-{% for r in running %}<div class="flash">Running {{ 'daily screen' if r.kind=='daily' else 'analysis' }} started {{ r.started[11:16] }} UTC…</div>{% endfor %}
+
+{% if run %}
+{% set fn = run.funnel or {} %}
+<section class="head">
+  <div>
+    <p class="eyebrow">Screen · {{ run.day|day }}</p>
+    <h1>{{ picks|length }} stock{{ 's' if picks|length != 1 }} worth a look</h1>
+  </div>
+  <a class="howlink" href="/run/{{ run.id }}">{{ icon('target', 16) }}How these were found</a>
+</section>
+<a class="funnel" href="/run/{{ run.id }}" aria-label="How the list was found">
+  <span><b>{{ (fn.companies or 0)|num }}</b>companies</span>{{ icon('chev', 14, 'sep') }}
+  <span><b>{{ run.spikes or '-' }}</b>volume spikes</span>{{ icon('chev', 14, 'sep') }}
+  <span><b>{{ picks|length }}</b>pass filters</span>{{ icon('chev', 14, 'sep') }}
+  <span><b>{{ run.models|length }}</b>AIs vote</span>
+</a>
+
+<ul class="stocks">
+{% for p in picks %}{% set s = p.sheet or {} %}
+<li><a href="/stock/{{ run.id }}/{{ p.isin }}" class="row">
+  <span class="who"><b>{{ (p.name or p.symbol)|nice }}</b><span class="muted">{{ p.symbol }} · {{ p.price|inr }} {{ change(s.change_pct) }}</span></span>
+  <span class="vote">{{ verdict(p.verdict) }}{{ dots(p.opinions) }}</span>
+  <span class="score"><b>{{ (p.verdict or {}).avg_score or '–' }}</b><span class="muted">/10</span></span>
+  {{ icon('chev', 18, 'chev') }}
+</a></li>
+{% else %}
+<li class="empty small">No stock passed every filter that day.</li>
+{% endfor %}
+</ul>
+<p class="legend muted">{{ icon('info', 14) }} Each dot is one AI's vote: <i class="dot buy"></i> buy <i class="dot hold"></i> hold <i class="dot sell"></i> sell. Score is the average out of 10.</p>
+{% else %}
+<div class="empty card">
+  {{ icon('clock', 28) }}
+  <h1>No screen yet</h1>
+  <p class="muted">It runs by itself on weekdays at 8:15 pm, after the market files are out.</p>
+  <form method="post" action="/screen"><button class="btn">{{ icon('play', 16) }}Run it now</button></form>
+</div>
+{% endif %}
+
+{% if checks %}
+<h2 class="sub">Stocks you checked</h2>
+<ul class="stocks compact">
+{% for c in checks %}
+<li><a class="row" href="/run/{{ c.id }}">
+  <span class="who"><b>{{ (c.name or c.symbol or '')|nice }}</b><span class="muted">{{ c.symbol }} · {{ c.day|day }}</span></span>
+  <span class="vote">{% if c.status == 'running' %}<span class="chip none">{{ icon('spin', 14, 'spin') }}Working</span>{% elif c.status == 'failed' %}<span class="chip sell">{{ icon('alert', 14) }}Failed</span>{% else %}{{ verdict(c.verdict) }}{% endif %}</span>
+  <span class="score"><b>{{ c.verdict.avg_score or '–' }}</b><span class="muted">/10</span></span>
+  {{ icon('chev', 18, 'chev') }}
+</a></li>
+{% endfor %}
+</ul>
 {% endif %}
 {% if run %}
-<h1>{{ 'Screen' if run.kind=='daily' else 'Analysis' }} · {{ run.day }}</h1>
-<p class="mute small">{{ picks|length }} passed · {{ run.spikes or 0 }} volume spikes checked</p>
-<div class="card scroll"><table>
-<tr><th>Stock</th><th class="num">Price</th><th class="num hide-sm">Volume</th><th class="num hide-sm">Delivery</th><th>Council</th><th class="hide-sm">Main risk</th></tr>
-{% for p in picks %}{% set s = p.sheet or {} %}
-<tr class="row"><td><a href="/stock/{{ run.id }}/{{ p.isin }}"><b>{{ p.name }}</b></a><div class="small mute">{{ p.symbol }}</div></td>
-<td class="num">₹{{ p.price }}<div class="small mute">{{ s.change_pct }}%</div></td>
-<td class="num hide-sm">{{ s.spike_x or '-' }}×</td>
-<td class="num hide-sm">{{ (s.technicals or {}).delivery_pct_today or '-' }}%</td>
-<td>{% include "_call.html" %}</td>
-<td class="hide-sm small">{% for o in (p.opinions or []) if o.key_risk and group(o.verdict) == (p.verdict or {}).lean %}{% if loop.first %}{{ o.key_risk }}{% endif %}{% endfor %}{% if p.error %}<span class="SELL">{{ p.error[:120] }}</span>{% endif %}</td></tr>
-{% else %}<tr><td colspan="6" class="mute">No stock passed all filters today.</td></tr>{% endfor %}
-</table></div>
-{% else %}<p class="mute">No daily screen yet. The first one runs this evening.</p>{% endif %}
-{% if recent %}<h2>Recent one-off analyses</h2><div class="card"><table>
-{% for r in recent %}{% set p = {'verdict': r.verdict} %}<tr class="row"><td><a href="/stock/{{ r.id }}/{{ r.isin }}"><b>{{ r.name }}</b></a><div class="small mute">{{ r.symbol }} · {{ r.day }}</div></td><td>{% include "_call.html" %}</td></tr>{% endfor %}
-</table></div>{% endif %}
+<form method="post" action="/screen" class="rerun"><button class="btn ghost">{{ icon('play', 14) }}Run the screen again now</button><span class="muted small">takes ~5 min · about $0.50</span></form>
+{% endif %}
 {% endblock %}
+{% block scripts %}{% if running %}<script>setTimeout(() => location.reload(), 15000)</script>{% endif %}{% endblock %}

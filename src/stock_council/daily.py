@@ -118,6 +118,12 @@ def analyse(run_id: int, isin: str, symbol: str, st: dict) -> float:
         md = render_markdown(sheet)
         _pick_set(conn, run_id, isin, status="news", name=sheet["name"], price=sheet["technicals"]["close"],
                   sheet=sheet, sheet_md=md)
+        if not IS_US:   # warm the "Who owns it" history so the stock page opens instantly
+            try:
+                from .holdings import history
+                history(sheet.get("nse_symbol") or "", sheet.get("bse_code"))
+            except Exception:
+                pass
         res = council.run(
             sheet, md, prompt=st["prompt"], members=st["models"],
             on_news=lambda n: _pick_set(conn, run_id, isin, status="council", news=n),

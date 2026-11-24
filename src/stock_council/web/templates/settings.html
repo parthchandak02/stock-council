@@ -2,8 +2,38 @@
 {% block title %}Settings · Stock Council{% endblock %}
 {% block main %}
 <section class="head"><div><p class="eyebrow">Settings</p><h1>Screen and council</h1></div></section>
-{% if saved %}<div class="note good">{{ icon('check', 16) }}<span>Saved. The next run uses it.</span></div>{% endif %}
+{% if saved %}<div class="note good">{{ icon('check', 16) }}<span>Saved. The next run uses it.{% if sent %} A verify link went to <b>{{ sent }}</b>: click it once to start receiving the email.{% endif %}</span></div>{% endif %}
 <form method="post" action="/settings" class="settings">
+  <h2 class="sub" id="schedule">{{ icon('clock', 18) }}Evening run</h2>
+  {% set sc = st.schedule %}
+  <div class="fields card">
+    <label><span><b>Run automatically</b><span class="muted small">Screen, council and email, once a day</span></span>
+      <input type="checkbox" name="sched_on" value="1" {{ 'checked' if sc.enabled }} class="switch"></label>
+    <label><span><b>Time</b><span class="muted small">India time; exchange files are usually out by 7 pm</span></span>
+      <select name="sched_time" aria-label="Run time">{% for t in times %}<option {{ 'selected' if t == sc.time }}>{{ t }}</option>{% endfor %}</select></label>
+    <div class="row-days"><span><b>Days</b><span class="muted small">Holidays are skipped by themselves</span></span>
+      <span class="days">{% for d in daynames %}<label class="day"><input type="checkbox" name="sched_days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in sc.days }}><span>{{ d }}</span></label>{% endfor %}</span></div>
+    <label><span><b>Stocks sent to the council</b><span class="muted small">At most this many each evening (about $0.06 each)</span></span>
+      <input type="number" name="max_stocks" min="1" max="30" step="1" value="{{ sc.max_stocks }}"></label>
+  </div>
+
+  <h2 class="sub" id="email">{{ icon('mail', 18) }}Evening email</h2>
+  {% set em = st.email %}
+  <div class="fields card stack">
+    <label class="inline"><span><b>Send the evening email</b><span class="muted small">From screen@parthchandak.info</span></span>
+      <input type="checkbox" name="email_on" value="1" {{ 'checked' if em.enabled }} class="switch"></label>
+    <label><span><b>To</b><span class="muted small">Comma separated</span></span>
+      <textarea name="email_to" rows="2">{{ em.to|join(', ') }}</textarea></label>
+    <label><span><b>CC</b><span class="muted small">Optional</span></span>
+      <textarea name="email_cc" rows="2">{{ em.cc|join(', ') }}</textarea></label>
+    {% if addr_status is not none and (em.to or em.cc) %}
+    <div class="addr"><span class="muted small">Delivery</span>
+      {% for a in em.to + em.cc %}{% set ok = addr_status.get(a|lower) %}
+      <span class="chip {{ 'buy' if ok else 'hold' }}">{{ icon('check' if ok else 'clock', 13) }}{{ a }} · {{ 'verified' if ok else ('waiting for verify click' if (a|lower) in addr_status else 'not added yet') }}</span>
+      {% endfor %}</div>
+    {% endif %}
+  </div>
+
   <h2 class="sub">{{ icon('scale', 18) }}Filters</h2>
   <div class="fields card">
   {% for k, pair in FILTER_LABELS.items() %}{% set title, desc = pair %}

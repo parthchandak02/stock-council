@@ -256,11 +256,19 @@ def history(request: Request):
 
 
 @app.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request, saved: str = ""):
+def settings_page(request: Request, saved: str = "", sent: str = ""):
     st = get_settings(db())
     models_text = "\n".join(f"{m['name']} | {m['model']}" for m in st["models"])
+    try:
+        from ..mailer import address_status
+        status = address_status()
+    except Exception:
+        status = None
+    times = [f"{h:02d}:{m:02d}" for h in range(17, 24) for m in (0, 15, 30, 45)]
     return tpl.TemplateResponse(request, "settings.html", {
-        "st": st, "models_text": models_text, "saved": saved, "nav": "settings"})
+        "st": st, "models_text": models_text, "saved": saved, "sent": sent, "nav": "settings",
+        "addr_status": status, "times": times,
+        "daynames": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]})
 
 
 @app.post("/settings")
@@ -285,11 +293,26 @@ async def save_settings(request: Request):
             if name and "/" in model:
                 models.append({"name": name, "model": model})
     save_setting(conn, "models", models or COUNCIL)
+    sent = []
+    if "sched_time" in form:
+        save_setting(conn, "schedule", {
+            "enabled": form.get("sched_on") == "1", "time": form.get("sched_time") or "20:15",
+            "days": sorted(int(d) for d in form.getlist("sched_days") if d.isdigit()),
+            "max_stocks": max(1, min(30, int(float(form.get("max_stocks") or 20))))})
+        split = lambda s: [x.strip() for x in (s or "").replace("\n", ",").split(",") if "@" in x]
+        to, cc = split(form.get("email_to")), split(form.get("email_cc"))
+        save_setting(conn, "email", {"enabled": form.get("email_on") == "1", "to": to, "cc": cc})
+        try:
+            from ..mailer import ensure_addresses
+            sent = ensure_addresses(to + cc)   # Cloudflare emails each new address a verify link
+        except Exception:
+            pass
     if "broker_to" in form:
         save_setting(conn, "broker_to", ", ".join(x.strip() for x in form["broker_to"].replace("\n", ",").split(",") if x.strip()))
         save_setting(conn, "accounts", [x.strip() for x in (form.get("accounts") or "").replace(",", "\n").splitlines() if x.strip()])
         save_setting(conn, "gmail_account", (form.get("gmail_account") or "").strip())
-    return RedirectResponse("/settings?saved=1", status_code=303)
+    from urllib.parse import quote
+    return RedirectResponse("/settings?saved=1" + (f"&sent={quote(', '.join(sent))}" if sent else ""), status_code=303)
 
 
 # ---------- screener ----------

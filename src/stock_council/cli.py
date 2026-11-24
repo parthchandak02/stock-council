@@ -37,6 +37,34 @@ def send_run_email(run_id: int) -> None:
     conn.commit()
 
 
+def email_on() -> bool:
+    from .daily import db
+    from .mailer import recipients
+    from .settings import get_settings
+    return bool(get_settings(db())["email"].get("enabled")) and bool(recipients()[0])
+
+
+def not_time_yet() -> str | None:
+    """Reason to skip this timer tick, or None when the evening run should start now."""
+    from .daily import db, ist_today
+    from .exchanges import ist_today as _d
+    from datetime import datetime, timedelta, timezone
+    from .settings import get_settings
+    conn = db()
+    sc = get_settings(conn)["schedule"]
+    now = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+    if not sc.get("enabled"):
+        return "schedule is off in Settings"
+    if now.weekday() not in (sc.get("days") or []):
+        return "not a scheduled day"
+    if now.strftime("%H:%M") < sc.get("time", "20:15"):
+        return f"scheduled for {sc.get('time')} India time"
+    if conn.execute("SELECT 1 FROM runs WHERE kind='daily' AND status IN ('running','done','failed') AND day=?",
+                    (ist_today(),)).fetchone():
+        return "today's run already started, done or failed (see History)"
+    return None
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="stock-council")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -52,6 +80,8 @@ def main() -> None:
     d.add_argument("--no-email", action="store_true")
     d.add_argument("--max", type=int, default=20)
     d.add_argument("--require-today", action="store_true", help="skip quietly if today's files are not out")
+    d.add_argument("--scheduled", action="store_true",
+                   help="timer mode: run only if Settings' schedule says it's time (and today hasn't run)")
     uv = sub.add_parser("universe", help="refresh Screener fundamentals (oldest first)")
     uv.add_argument("--limit", type=int, default=None)
     uv.add_argument("--max-age", type=int, default=7, help="re-fetch anything older than this many days (0 = all)")
@@ -81,8 +111,16 @@ def main() -> None:
         print("run", run_one(a.symbol))
     elif a.cmd == "daily":
         from .daily import NothingToDo, run_daily
+        if a.scheduled:
+            why = not_time_yet()
+            if why:
+                print("not now:", why)
+                return
         try:
-            run_id = run_daily(max_stocks=a.max, require_today=a.require_today)
+            from .daily import db as _db
+            from .settings import get_settings as _gs
+            mx = _gs(_db())["schedule"].get("max_stocks") or a.max
+            run_id = run_daily(max_stocks=mx if a.scheduled else a.max, require_today=a.require_today or a.scheduled)
         except NothingToDo as e:
             print("nothing to do:", e)
             return
@@ -92,7 +130,7 @@ def main() -> None:
             print("saved screens", run_saved_screens())   # cheap, offline; their new matches go in the email
         except Exception as e:
             logging.exception("saved screens failed: %s", e)
-        if not a.no_email and os.environ.get("SC_EMAIL_TO"):
+        if not a.no_email and email_on():
             send_run_email(run_id)
             print("emailed")
         from .upkeep import after_screen

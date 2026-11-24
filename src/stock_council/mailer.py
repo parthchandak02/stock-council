@@ -84,12 +84,51 @@ def _one_line(p: dict) -> str:
     return risk[:160]
 
 
-def send(subject: str, body_html: str, body_txt: str) -> dict:
+def recipients() -> tuple[list[str], list[str]]:
+    """To and CC from Settings; the .env values are only a fallback."""
+    try:
+        from .daily import db
+        from .settings import get_settings
+        em = get_settings(db())["email"]
+        if em.get("to"):
+            return em["to"], em.get("cc") or []
+    except Exception:
+        pass
+    return _list("SC_EMAIL_TO"), _list("SC_EMAIL_CC")
+
+
+def _cf(method: str, path: str, **kw) -> dict:
     account = os.environ["CLOUDFLARE_ACCOUNT_ID"]
-    payload = {"from": os.environ["SC_EMAIL_FROM"], "to": _list("SC_EMAIL_TO"), "subject": subject,
+    r = httpx.request(method, f"https://api.cloudflare.com/client/v4/accounts/{account}/{path}",
+                      headers={"Authorization": f"Bearer {_token()}"}, timeout=30, **kw)
+    return r.json()
+
+
+def address_status() -> dict[str, bool]:
+    """Cloudflare only delivers to addresses that clicked its verify link: email -> verified?"""
+    d = _cf("GET", "email/routing/addresses")
+    return {x["email"].lower(): bool(x.get("verified")) for x in d.get("result") or []}
+
+
+def ensure_addresses(emails: list[str]) -> list[str]:
+    """Register new recipients with Cloudflare, which emails each one a verify link. Returns the new ones."""
+    known = address_status()
+    added = []
+    for e in emails:
+        if e.lower() not in known:
+            if _cf("POST", "email/routing/addresses", json={"email": e}).get("success"):
+                added.append(e)
+    return added
+
+
+def send(subject: str, body_html: str, body_txt: str, to: list[str] | None = None, cc: list[str] | None = None) -> dict:
+    account = os.environ["CLOUDFLARE_ACCOUNT_ID"]
+    if to is None:
+        to, cc = recipients()
+    payload = {"from": os.environ["SC_EMAIL_FROM"], "to": to, "subject": subject,
                "html": body_html, "text": body_txt}
-    if _list("SC_EMAIL_CC"):
-        payload["cc"] = _list("SC_EMAIL_CC")
+    if cc:
+        payload["cc"] = cc
     r = httpx.post(f"https://api.cloudflare.com/client/v4/accounts/{account}/email/sending/send",
                    headers={"Authorization": f"Bearer {_token()}"}, json=payload, timeout=60)
     data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {"raw": r.text}

@@ -34,6 +34,7 @@ tpl.env.filters["fail"] = short_fail
 tpl.env.filters["num"] = lambda x: "-" if x is None else f"{x:,}"
 tpl.env.filters["day"] = lambda s: date.fromisoformat(s[:10]).strftime("%a %-d %b") if s else ""
 tpl.env.globals.update(group=lambda v: VOTE_GROUP.get(str(v or "").lower(), ""), short_name=short_name,
+                       key_numbers=key_numbers,
                        FILTER_LABELS=FILTER_LABELS)
 
 ICON_FILES = {
@@ -152,7 +153,7 @@ def stock(request: Request, run_id: int, isin: str):
     if not run or not row:
         return page_404(request)
     p = _load(row)
-    if p["status"] not in ("done", "error"):
+    if p["status"] in ("queued", "facts"):
         return RedirectResponse(f"/run/{run_id}", status_code=303)
     return tpl.TemplateResponse(request, "stock.html", {
         "run": run, "p": p, "nums": key_numbers(p.get("sheet") or {}), "why": why(p), "nav": "today"})

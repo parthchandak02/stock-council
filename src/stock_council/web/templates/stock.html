@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, agree, change, tone_of %}
 {% block title %}{{ p.name|nice }} · Stock Council{% endblock %}
-{% block main %}{% set s = p.sheet or {} %}{% set t = s.technicals or {} %}{% set v = p.verdict or {} %}
+{% block main %}
+<div id="live" {% if p.status in ('news', 'council') %}data-poll="1"{% endif %}>{% set s = p.sheet or {} %}{% set t = s.technicals or {} %}{% set v = p.verdict or {} %}
 <a class="back" href="/">{{ icon('back', 16) }}Today</a>
 
 <section class="hero card">
@@ -10,9 +11,9 @@
     <p class="price">{{ p.price|inr }} {{ change(s.change_pct) }}</p>
   </div>
   <div class="hero-vote">
-    {{ verdict(v, 'big') }}
+    {% if p.status in ('news', 'council') %}<span class="chip none big">{{ icon('spin', 15, 'spin') }}{{ 'Searching news' if p.status == 'news' else 'Voting' }}</span>{% else %}{{ verdict(v, 'big') }}{% endif %}
     <p>{{ agree(v) }}</p>
-    {{ dots(p.opinions, big=True) }}
+    {{ dots(p.opinions, run.models if p.status in ('news','council') else None, big=True) }}
   </div>
   <dl class="facts3">
     <div><dt>Volume vs usual</dt><dd>{{ s.spike_x or '-' }}×</dd></div>
@@ -34,10 +35,10 @@
 {% endfor %}
 </div>
 
-<h2 class="sub">{{ icon('council', 18) }}What each AI said</h2>
+<h2 class="sub">{{ icon('council', 18) }}What each AI said{% if p.status == 'council' %} <span class="muted small">answers appear as they arrive</span>{% endif %}</h2>
 <div class="ais">
-{% for o in p.opinions or [] %}
-<details class="ai">
+{% for o in (p.opinions or [])|rejectattr('pending') %}
+<details class="ai" id="ai-{{ loop.index }}">
   <summary>
     <span class="dot {{ 'err' if o.error else tone_of(o.verdict) }}">{{ short_name(o.name) }}</span>
     <b>{{ o.name }}</b>
@@ -54,12 +55,14 @@
 {% endfor %}
 </div>
 
-<details class="fold card">
+<details class="fold card" id="news" {{ 'open' if p.status in ('news','council') }}>
   <summary>{{ icon('news', 18) }}<b>News the AIs read</b>{{ icon('chevdown', 16, 'tw') }}</summary>
   <div class="md small">{{ (p.news or {}).text | md | safe }}</div>
 </details>
-<details class="fold card">
-  <summary>{{ icon('file', 18) }}<b>Full fact sheet</b>{{ icon('chevdown', 16, 'tw') }}</summary>
-  <div class="md sheet small">{{ p.sheet_md | md | safe }}</div>
+<details class="fold card" id="sheet">
+  <summary>{{ icon('file', 18) }}<b>Full fact sheet</b><span class="muted small">what every AI read</span>{{ icon('chevdown', 16, 'tw') }}</summary>
+  <div class="fs-body">{% include "_sheet.html" %}</div>
 </details>
+</div>
 {% endblock %}
+{% block scripts %}<script src="/static/live.js?v=1"></script>{% endblock %}

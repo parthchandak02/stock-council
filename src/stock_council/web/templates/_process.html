@@ -1,4 +1,4 @@
-{% from "_ui.html" import icon, verdict, dots, agree %}
+{% from "_ui.html" import icon, verdict, dots, agree, tone_of %}
 {% set stages = ['download', 'scan', 'filter', 'council', 'done'] %}
 {% set at = stages.index(run.stage) if run.stage in stages else 4 %}
 {% set fn = run.funnel or {} %}
@@ -50,17 +50,33 @@
     {% if picks %}<ul class="cards">{% for p in picks %}
       {% set st = p.status %}
       <li class="card stockcard {{ st }}">
-        {% if st == 'done' %}<a class="cover" href="/stock/{{ run.id }}/{{ p.isin }}" aria-label="Open {{ p.name }}"></a>{% endif %}
         <div class="sc-top"><b>{{ (p.name or p.symbol)|nice }}</b>
-          {% if st == 'done' %}{{ verdict(p.verdict) }}{% elif st == 'error' %}<span class="chip sell">{{ icon('alert', 14) }}Failed</span>{% else %}<span class="chip none">{{ icon('spin', 14, 'spin') }}{{ {'queued':'Waiting','facts':'Fact sheet','news':'News search','council':'Voting'}.get(st, st) }}</span>{% endif %}
+          {% if st == 'done' %}{{ verdict(p.verdict) }}{% elif st == 'error' %}<span class="chip sell">{{ icon('alert', 14) }}Failed</span>{% else %}<span class="chip none">{{ icon('spin', 14, 'spin') }}{{ {'queued':'Waiting','facts':'Building fact sheet','news':'Searching news','council':'Voting'}.get(st, st) }}</span>{% endif %}
         </div>
         <div class="sc-steps muted small">
           <span class="{{ 'on' if st in ('news','council','done') }}">{{ icon('file', 13) }}Facts</span>
           <span class="{{ 'on' if st in ('council','done') }}">{{ icon('news', 13) }}News</span>
           <span class="{{ 'on' if st == 'done' }}">{{ icon('council', 13) }}Votes</span>
         </div>
-        {% if st in ('council', 'done') %}{{ dots(p.opinions, run.models) }}{% endif %}
-        {% if st == 'done' %}<div class="small">{{ agree(p.verdict) }}</div>{% endif %}
+        {% if st in ('council', 'done') %}<div class="sc-dots">{{ dots(p.opinions, run.models) }}{% if st == 'done' %}<span class="small">{{ agree(p.verdict) }}</span>{% endif %}</div>{% endif %}
+        {% if p.sheet %}
+        <details class="peek" id="f-{{ p.isin }}"><summary>{{ icon('file', 14) }}Facts{{ icon('chevdown', 14, 'tw') }}</summary>
+          <div class="peek-nums">{% for n in key_numbers(p.sheet) %}<span class="pn {{ n.tone }}"><span>{{ n.label }}</span><b>{{ n.value }}</b></span>{% endfor %}</div>
+        </details>{% endif %}
+        {% if p.news %}
+        <details class="peek" id="n-{{ p.isin }}"><summary>{{ icon('news', 14) }}News{{ icon('chevdown', 14, 'tw') }}</summary>
+          <div class="md small">{{ (p.news.text or '')|md|safe }}</div>
+        </details>{% endif %}
+        {% set answered = (p.opinions or [])|rejectattr('pending')|list %}
+        {% if answered %}
+        <details class="peek" id="a-{{ p.isin }}" {{ 'open' if st == 'council' }}><summary>{{ icon('council', 14) }}Answers · {{ answered|length }} of {{ run.models|length }}{{ icon('chevdown', 14, 'tw') }}</summary>
+          <ul class="answers">{% for o in answered %}
+            <li><span class="dot {{ 'err' if o.error else tone_of(o.verdict) }}">{{ short_name(o.name) }}</span>
+              {% if o.error %}<span class="muted">{{ o.name }}: no answer</span>
+              {% else %}<span><b>{{ o.name }}</b> <span class="v {{ tone_of(o.verdict) }}">{{ o.verdict }} {{ o.score }}</span><br><span class="muted">{{ (o.key_risk or (o.lines or [''])[0])[:160] }}</span></span>{% endif %}</li>
+          {% endfor %}</ul>
+        </details>{% endif %}
+        {% if st in ('news', 'council', 'done') %}<a class="open" href="/stock/{{ run.id }}/{{ p.isin }}">{{ 'Open full page' if st == 'done' else 'Open (updates live)' }}{{ icon('chev', 14) }}</a>{% endif %}
         {% if st == 'error' %}<p class="small muted">{{ (p.error or '')[:140] }}</p>{% endif %}
       </li>
     {% endfor %}</ul>

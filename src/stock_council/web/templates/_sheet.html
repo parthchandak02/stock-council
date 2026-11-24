@@ -1,0 +1,91 @@
+{# The fact sheet as tables: the same numbers every AI received, laid out to read. #}
+{% set f = s.fundamentals or {} %}{% set t = s.technicals or {} %}
+{% set yrs = (f.annual or [])[:4] %}
+{% macro n(x, suf='') -%}{{ '–' if x is none else ('{:,.1f}'.format(x) if x is number and x is not integer else '{:,}'.format(x)) ~ (suf if x is not none else '') }}{%- endmacro %}
+{% macro fy(d) %}FY{{ (d or '')[2:4] }}{% endmacro %}
+
+<section class="fs">
+  <h3>Cash flow <span class="muted small">₹ Cr</span></h3>
+  <div class="tblwrap"><table class="tbl">
+    <tr><th></th>{% for a in yrs %}<th>{{ fy(a.fy_end) }}</th>{% endfor %}</tr>
+    <tr><td>Sales</td>{% for a in yrs %}<td>{{ n(a.sales) }}</td>{% endfor %}</tr>
+    <tr><td>Net profit</td>{% for a in yrs %}<td>{{ n(a.net_profit) }}</td>{% endfor %}</tr>
+    <tr><td>Depreciation</td>{% for a in yrs %}<td>{{ n(a.depreciation) }}</td>{% endfor %}</tr>
+    <tr><td>Operating cash flow</td>{% for a in yrs %}<td>{{ n(a.operating_cash_flow) }}</td>{% endfor %}</tr>
+    <tr class="hl"><td>Cash ÷ (profit + dep.)</td>{% for a in yrs %}<td>{{ n(a.cfo_to_profit_plus_dep_pct, '%') }}</td>{% endfor %}</tr>
+    <tr><td>Capex</td>{% for a in yrs %}<td>{{ n(a.capex) }}</td>{% endfor %}</tr>
+    <tr class="hl"><td>Free cash flow</td>{% for a in yrs %}<td class="{{ 'neg' if (a.free_cash_flow or 0) < 0 }}">{{ n(a.free_cash_flow) }}</td>{% endfor %}</tr>
+  </table></div>
+</section>
+
+<section class="fs">
+  <h3>Working capital &amp; debt</h3>
+  <div class="tblwrap"><table class="tbl">
+    <tr><th></th>{% for a in yrs %}<th>{{ fy(a.fy_end) }}</th>{% endfor %}</tr>
+    <tr><td>Inventory days</td>{% for a in yrs %}<td>{{ n(a.inventory_days) }}</td>{% endfor %}</tr>
+    <tr><td>Receivable days</td>{% for a in yrs %}<td>{{ n(a.receivable_days) }}</td>{% endfor %}</tr>
+    <tr><td>Payable days</td>{% for a in yrs %}<td>{{ n(a.payable_days) }}</td>{% endfor %}</tr>
+    <tr class="hl"><td>Cash cycle</td>{% for a in yrs %}<td>{{ n(a.cash_conversion_cycle_days) }}</td>{% endfor %}</tr>
+    <tr><td>Working-capital days</td>{% for a in yrs %}<td>{{ n(a.working_capital_days) }}</td>{% endfor %}</tr>
+    <tr class="hl"><td>Debt / equity</td>{% for a in yrs %}<td>{{ n(a.debt_to_equity) }}</td>{% endfor %}</tr>
+  </table></div>
+  <p class="muted small">Latest debt / equity {{ n(f.debt_to_equity) }} (balance sheet {{ f.debt_to_equity_as_of }})</p>
+</section>
+
+{% if s.shareholding %}
+<section class="fs">
+  <h3>Who owns it <span class="muted small">% of shares, NSE filings</span></h3>
+  <div class="tblwrap"><table class="tbl">
+    <tr><th></th>{% for q in s.shareholding %}<th>{{ q.quarter[3:6]|title }} {{ q.quarter[-2:] }}</th>{% endfor %}</tr>
+    {% for key, label in [('promoter','Promoter'),('fii','Foreign funds (FII)'),('dii','Indian funds (DII)'),('mutual_funds','  of which mutual funds'),('public_non_institutions','Public'),('retail_small','  small investors')] %}
+    <tr class="{{ 'hl' if key in ('promoter','fii','dii') }}"><td>{{ label }}</td>{% for q in s.shareholding %}<td>{{ n(q[key]) }}</td>{% endfor %}</tr>
+    {% endfor %}
+  </table></div>
+  {% set pl = s.pledge %}
+  <p class="muted small">{% if pl and pl.pledged_pct_of_promoter_shares %}Promoter pledge: <b>{{ pl.pledged_pct_of_promoter_shares }}%</b> of promoter shares = {{ pl.pledged_pct_of_total_shares }}% of all shares ({{ pl.as_of }}){% else %}No promoter pledge disclosed.{% endif %}</p>
+</section>
+{% endif %}
+
+<section class="fs">
+  <h3>Price &amp; volume <span class="muted small">NSE + BSE combined</span></h3>
+  <dl class="kv">
+    <div><dt>52-week range</dt><dd>₹{{ t.low_52w }} – ₹{{ t.high_52w }}</dd></div>
+    <div><dt>From 52-week high</dt><dd>{{ n(t.pct_from_52w_high, '%') }}</dd></div>
+    <div><dt>1 month / 1 year</dt><dd>{{ n(t.return_1m_pct, '%') }} / {{ n(t.return_1y_pct, '%') }}</dd></div>
+    <div><dt>50 / 200-day average</dt><dd>₹{{ t.sma_50 }} / ₹{{ t.sma_200 }}</dd></div>
+    <div><dt>RSI (14)</dt><dd>{{ t.rsi_14 }}</dd></div>
+    <div><dt>Volume: week vs year</dt><dd>{{ n(t.volume_1w_avg) }} vs {{ n(t.volume_1y_avg) }}</dd></div>
+    <div><dt>Delivery today / 30-day</dt><dd>{{ n(t.delivery_pct_today, '%') }} / {{ n(t.delivery_pct_30d_avg, '%') }}</dd></div>
+    <div><dt>Range before the spike</dt><dd>{{ n(t.range_60d_before_spike_pct, '%') }} <span class="muted">in 60 days</span></dd></div>
+  </dl>
+  <div class="tblwrap"><table class="tbl">
+    <tr><th>Day</th><th>Close</th><th>Volume</th><th>Delivered</th></tr>
+    {% for d in (t.last_10_sessions or [])|reverse %}<tr class="{{ 'hl' if d.volume > 3 * (t.volume_1y_avg or 1) }}"><td>{{ d.date|day }}</td><td>₹{{ d.close }}</td><td>{{ n(d.volume) }}</td><td>{{ n(d.delivery_pct, '%') }}</td></tr>{% endfor %}
+  </table></div>
+</section>
+
+<section class="fs">
+  <h3>Quarterly results <span class="muted small">₹ Cr</span></h3>
+  <div class="tblwrap"><table class="tbl">
+    <tr><th></th>{% for q in f.quarters or [] %}<th>{{ q.quarter_end[5:7]|int }}/{{ q.quarter_end[2:4] }}</th>{% endfor %}</tr>
+    <tr><td>Sales</td>{% for q in f.quarters or [] %}<td>{{ n(q.sales) }}</td>{% endfor %}</tr>
+    <tr><td>Net profit</td>{% for q in f.quarters or [] %}<td>{{ n(q.net_profit) }}</td>{% endfor %}</tr>
+  </table></div>
+  <p class="muted small">3-year growth: sales {{ n(f.sales_cagr_3y_pct, '%') }} a year, profit {{ n(f.profit_cagr_3y_pct, '%') }} a year</p>
+</section>
+
+<section class="fs">
+  <h3>Valuation &amp; efficiency</h3>
+  <dl class="kv">
+    <div><dt>Market cap</dt><dd>₹{{ n(f.market_cap_cr) }} Cr</dd></div>
+    <div><dt>P/E (trailing)</dt><dd>{{ n(f.pe) }}</dd></div>
+    <div><dt>P/B</dt><dd>{{ n(f.pb) }}</dd></div>
+    <div><dt>PEG</dt><dd>{{ n(f.peg) }}</dd></div>
+    <div><dt>ROE</dt><dd>{{ n(f.roe_pct, '%') }} <span class="muted">3-yr {{ n(f.roe_3y_avg_pct, '%') }}</span></dd></div>
+    <div><dt>ROCE</dt><dd>{{ n(f.roce_pct, '%') }}</dd></div>
+    <div><dt>ROA</dt><dd>{{ n(f.roa_pct, '%') }}</dd></div>
+    <div><dt>Asset turnover</dt><dd>{{ n(f.asset_turnover) }}×</dd></div>
+    <div><dt>Sales (12 months)</dt><dd>₹{{ n(f.ttm_sales) }} Cr</dd></div>
+    <div><dt>Profit (12 months)</dt><dd>₹{{ n(f.ttm_net_profit) }} Cr</dd></div>
+  </dl>
+</section>

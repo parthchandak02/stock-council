@@ -147,4 +147,15 @@ def render_markdown(s: dict) -> str:
           f"- ROE {_fmt(f.get('roe_pct'), '%')} (last FY; 3-yr avg {_fmt(f.get('roe_3y_avg_pct'), '%')}), "
           f"ROCE {_fmt(f.get('roce_pct'), '%')}, ROA {_fmt(f.get('roa_pct'), '%')}, asset turnover {_fmt(f.get('asset_turnover'))}×",
           f"- TTM sales ₹{_fmt(f.get('ttm_sales'))} Cr, TTM net profit ₹{_fmt(f.get('ttm_net_profit'))} Cr"]
-    return "\n".join(L)
+    return "\n".join(_spaced(L))
+
+
+def _spaced(lines: list[str]) -> list[str]:
+    """Markdown tables need a blank line before and after them, or they print as raw text."""
+    out: list[str] = []
+    for line in lines:
+        is_row = line.startswith("|")
+        if out and out[-1].strip() and is_row != out[-1].startswith("|"):
+            out.append("")
+        out.append(line)
+    return out

@@ -43,7 +43,7 @@ def _cagr(new, old, years):
     return round(((new / old) ** (1 / years) - 1) * 100, 1)
 
 
-def fetch(yahoo_symbol: str, price: float | None = None) -> dict:
+def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = False) -> dict:
     t = yf.Ticker(yahoo_symbol)
     inc, bs, cf = t.income_stmt, t.balance_sheet, t.cashflow
     qi, qb = t.quarterly_income_stmt, t.quarterly_balance_sheet
@@ -136,8 +136,15 @@ def fetch(yahoo_symbol: str, price: float | None = None) -> dict:
 
     pe = _div(mcap, ttm_pat) if ttm_pat and ttm_pat > 0 else None
     profit_cagr_3y = _cagr(at(pat, 0), at(pat, 3), 3)
+    sector = industry = None
+    if with_sector:
+        try:
+            info = t.get_info()
+            sector, industry = info.get("sector"), info.get("industry")
+        except Exception:
+            pass
     return {
-        "yahoo_symbol": yahoo_symbol,
+        "yahoo_symbol": yahoo_symbol, "sector": sector, "industry": industry,
         "price": _r(price), "shares_cr": _r(shares / CR) if shares else None,
         "market_cap_cr": _r(mcap),
         "ttm_net_profit": _r(ttm_pat), "ttm_sales": _r(ttm_sales),

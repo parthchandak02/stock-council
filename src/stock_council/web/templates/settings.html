@@ -7,7 +7,7 @@
   <h2 class="sub" id="schedule">{{ icon('clock', 18) }}Evening run</h2>
   {% set sc = st.schedule %}
   <div class="fields card">
-    <label><span><b>Run automatically</b><span class="muted small">Screen, council and email, once a day</span></span>
+    <label><span><b>Run automatically</b><span class="muted small">Screen, council and the evening message, once a day</span></span>
       <input type="checkbox" name="sched_on" value="1" {{ 'checked' if sc.enabled }} class="switch"></label>
     <label><span><b>Time</b><span class="muted small">India time; exchange files are usually out by 7 pm</span></span>
       <select name="sched_time" aria-label="Run time">{% for t in times %}<option {{ 'selected' if t == sc.time }}>{{ t }}</option>{% endfor %}</select></label>
@@ -17,10 +17,16 @@
       <input type="number" name="max_stocks" min="1" max="30" step="1" value="{{ sc.max_stocks }}"></label>
   </div>
 
+  <h2 class="sub" id="whatsapp">{{ icon('council', 18) }}Evening WhatsApp</h2>
+  <div class="fields card">
+    <label><span><b>Post the evening list on WhatsApp</b><span class="muted small">To the group "Invest · Stock &amp; ETF Screen" (Dad, Parth, Hermes), sent by Hermes</span></span>
+      <input type="checkbox" name="wa_on" value="1" {{ 'checked' if st.whatsapp.enabled }} class="switch"></label>
+  </div>
+
   <h2 class="sub" id="email">{{ icon('mail', 18) }}Evening email</h2>
   {% set em = st.email %}
   <div class="fields card stack">
-    <label class="inline"><span><b>Send the evening email</b><span class="muted small">From screen@parthchandak.info</span></span>
+    <label class="inline"><span><b>Send the evening email</b><span class="muted small">Off for now: Cloudflare sending needs a paid plan</span></span>
       <input type="checkbox" name="email_on" value="1" {{ 'checked' if em.enabled }} class="switch"></label>
     <label><span><b>To</b><span class="muted small">Comma separated</span></span>
       <textarea name="email_to" rows="2">{{ em.to|join(', ') }}</textarea></label>

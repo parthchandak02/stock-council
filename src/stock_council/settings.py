@@ -8,7 +8,8 @@ from .council import COUNCIL, DEFAULT_PROMPT
 from .store import ensure_schema
 
 DEFAULT_SCHEDULE = {"enabled": True, "time": "20:15", "days": [0, 1, 2, 3, 4], "max_stocks": 20}  # Mon=0, India time
-DEFAULT_EMAIL = {"enabled": True, "to": [], "cc": []}
+DEFAULT_EMAIL = {"enabled": False, "to": [], "cc": []}
+DEFAULT_WHATSAPP = {"enabled": True}
 
 SCHEMA = "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated TEXT)"
 
@@ -28,6 +29,7 @@ def get_settings(conn) -> dict:
         # Evening run and email (editable in Settings; the server checks every 15 minutes)
         "schedule": {**DEFAULT_SCHEDULE, **(rows.get("schedule") or {})},
         "email": {**DEFAULT_EMAIL, **(rows.get("email") or {})},
+        "whatsapp": {**DEFAULT_WHATSAPP, **(rows.get("whatsapp") or {})},
     }
 
 

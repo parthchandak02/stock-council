@@ -302,6 +302,7 @@ async def save_settings(request: Request):
         split = lambda s: [x.strip() for x in (s or "").replace("\n", ",").split(",") if "@" in x]
         to, cc = split(form.get("email_to")), split(form.get("email_cc"))
         save_setting(conn, "email", {"enabled": form.get("email_on") == "1", "to": to, "cc": cc})
+        save_setting(conn, "whatsapp", {"enabled": form.get("wa_on") == "1"})
         try:
             from ..mailer import ensure_addresses
             sent = ensure_addresses(to + cc)   # Cloudflare emails each new address a verify link

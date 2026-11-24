@@ -37,6 +37,33 @@ def send_run_email(run_id: int) -> None:
     conn.commit()
 
 
+def notify(run_id: int) -> None:
+    """Evening message(s). WhatsApp and email are independent: one failing doesn't stop the other."""
+    from .daily import db
+    from .settings import get_settings
+    st = get_settings(db())
+    if st["whatsapp"].get("enabled"):
+        try:
+            send_run_whatsapp(run_id)
+            print("whatsapp sent")
+        except Exception as e:
+            logging.exception("whatsapp failed: %s", e)
+    if email_on():
+        try:
+            send_run_email(run_id)
+            print("emailed")
+        except Exception as e:
+            logging.exception("email failed: %s", e)
+
+
+def send_run_whatsapp(run_id: int) -> None:
+    from .daily import db
+    from .web.app import _picks, _run
+    from .whatsapp import build_message, send
+    conn = db()
+    send(build_message(_run(conn, run_id), _picks(conn, run_id), os.environ.get("SC_SITE_URL", "")))
+
+
 def email_on() -> bool:
     from .daily import db
     from .mailer import recipients
@@ -89,6 +116,9 @@ def main() -> None:
     ow.add_argument("--limit", type=int, default=None)
     rt = sub.add_parser("retry", help="re-run failed stocks of a run")
     rt.add_argument("run_id", type=int)
+    wa = sub.add_parser("whatsapp", help="(re)send the WhatsApp message for a run")
+    wa.add_argument("run_id", type=int)
+    wa.add_argument("--dry", action="store_true", help="print it instead of sending")
     e = sub.add_parser("email")
     e.add_argument("run_id", type=int)
     sv = sub.add_parser("serve")
@@ -130,9 +160,8 @@ def main() -> None:
             print("saved screens", run_saved_screens())   # cheap, offline; their new matches go in the email
         except Exception as e:
             logging.exception("saved screens failed: %s", e)
-        if not a.no_email and email_on():
-            send_run_email(run_id)
-            print("emailed")
+        if not a.no_email:
+            notify(run_id)
         from .upkeep import after_screen
         print("upkeep", after_screen())
     elif a.cmd == "universe":
@@ -145,6 +174,16 @@ def main() -> None:
     elif a.cmd == "retry":
         from .daily import retry_failed
         print("retried", retry_failed(a.run_id))
+    elif a.cmd == "whatsapp":
+        if a.dry:
+            from .daily import db
+            from .web.app import _picks, _run
+            from .whatsapp import build_message
+            conn = db()
+            print(build_message(_run(conn, a.run_id), _picks(conn, a.run_id), os.environ.get("SC_SITE_URL", "")))
+        else:
+            send_run_whatsapp(a.run_id)
+            print("sent")
     elif a.cmd == "email":
         send_run_email(a.run_id)
     elif a.cmd == "serve":

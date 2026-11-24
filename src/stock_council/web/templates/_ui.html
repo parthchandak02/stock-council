@@ -1,32 +1,54 @@
-{# Icons: Phosphor (MIT) from one cached sprite. Small sizes use the bold weight so they stay crisp;
-   weight='d' gives the duotone version for larger, illustrative icons. #}
+{# Icons: Phosphor (MIT) from one cached sprite. Small sizes use the bold weight so they stay crisp. #}
 {% macro icon(name, size=18, cls="", weight=None) -%}
 {%- set w = weight if weight is not none else ('b' if size <= 16 else '') -%}
 <svg class="ic {{ cls }}" width="{{ size }}" height="{{ size }}" aria-hidden="true"><use href="/static/icons.svg?v=1#{{ name }}{{ '-' ~ w if w }}"/></svg>
 {%- endmacro %}
 
+{% macro flag(code) -%}<img class="flag" src="/static/flag-{{ code }}.svg" alt="" width="18" height="12">{%- endmacro %}
+
 {# Buy / Hold / Sell / Split, from a tally #}
 {% macro verdict(v, size="") -%}
 {% set c = (v or {}).call or "" %}
 {% set k = {"BUY": "buy", "SELL": "sell", "HOLD": "hold", "NO CONSENSUS": "split"}.get(c, "none") %}
-{% set word = {"BUY": "Buy", "SELL": "Sell", "HOLD": "Hold", "NO CONSENSUS": "Split"}.get(c, "—") %}
-{% set ic = {"buy": "up", "sell": "down", "hold": "flat", "split": "split"}.get(k, "flat") %}
-<span class="chip {{ k }} {{ size }}">{{ icon(ic, 15 if size else 14) }}{{ word }}</span>
+{% set word = {"BUY": "Buy", "SELL": "Sell", "HOLD": "Hold", "NO CONSENSUS": "Split"}.get(c, "–") %}
+<span class="chip {{ k }} {{ size }}">{{ word }}</span>
 {%- endmacro %}
 
 {% macro tone_of(verdict_text) -%}{{ {"BUY": "buy", "SELL": "sell", "HOLD": "hold"}.get(group(verdict_text), "hold") }}{%- endmacro %}
 
-{# One dot per AI, coloured by its vote; grey and pulsing while it is still thinking #}
+{# One block per AI, coloured by its vote; pulsing while it is still thinking #}
 {% macro dots(opinions, models=None, big=False) -%}
-<span class="dots {{ 'big' if big }}">
 {%- set ops = opinions or [] -%}
 {%- if not ops and models %}{% set ops = [] %}{% for m in models %}{% set _ = ops.append({"name": m.name, "pending": True}) %}{% endfor %}{% endif -%}
+<span class="votes" aria-label="AI votes">
 {%- for o in ops -%}
-  {%- if o.pending %}<span class="dot wait" title="{{ o.name }}: thinking…">{{ short_name(o.name) }}</span>
-  {%- elif o.error %}<span class="dot err" title="{{ o.name }}: no answer">{{ short_name(o.name) }}</span>
-  {%- else %}<span class="dot {{ tone_of(o.verdict) }}" title="{{ o.name }}: {{ o.verdict }} · {{ o.score }}/10">{{ short_name(o.name) }}</span>{% endif -%}
+  {%- if o.pending %}<i class="wait" title="{{ o.name }}: thinking…"></i>
+  {%- elif o.error %}<i class="err" title="{{ o.name }}: no answer"></i>
+  {%- else %}<i class="{{ tone_of(o.verdict) }}" title="{{ o.name }}: {{ o.verdict }} · {{ o.score }}/10"></i>{% endif -%}
 {%- endfor -%}
 </span>
+{%- endmacro %}
+
+{# The vote as a ring of one segment per AI, with "5/7" in the middle #}
+{% macro ring(opinions, v, size=62) -%}
+{%- set ops = (opinions or [])|rejectattr('pending')|list -%}
+{%- set n = (opinions or [])|length or 7 -%}
+{%- set r = size / 2 - 5 -%}{%- set C = 2 * 3.14159 * r -%}{%- set seg = C / n -%}
+<span class="ring" style="width:{{ size }}px;height:{{ size }}px"><svg viewBox="0 0 {{ size }} {{ size }}" width="{{ size }}" height="{{ size }}" aria-hidden="true">
+<circle cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r }}" fill="none" stroke="var(--line)" stroke-width="6"/>
+{%- for o in opinions or [] %}{% set col = 'line2' if o.pending or o.error else {'buy':'buy','hold':'hold','sell':'sell'}[tone_of(o.verdict)] %}
+<circle cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r }}" fill="none" stroke="var(--{{ col }})" stroke-width="6" stroke-dasharray="{{ '%.2f'|format(seg - 2.5) }} {{ '%.2f'|format(C - seg + 2.5) }}" stroke-dashoffset="{{ '%.2f'|format(-loop.index0 * seg) }}" transform="rotate(-90 {{ size/2 }} {{ size/2 }})"/>
+{%- endfor %}</svg><b>{{ (v or {}).agree or 0 }}/{{ (v or {}).voters or n }}</b></span>
+{%- endmacro %}
+
+{% macro gauge(pct, tone='good', lim=None, l='', r='', band=None) -%}
+<div class="gauge">{% if band %}<b style="left:{{ band[0] }}%;width:{{ band[1] - band[0] }}%"></b>{% endif %}<i class="bg-{{ tone }}" style="width:{{ [[pct, 0]|max, 100]|min }}%"></i>{% if lim is not none %}<u style="left:{{ lim }}%"></u>{% endif %}</div>
+{%- if l or r %}<div class="gl"><span>{{ l }}</span><span>{{ r }}</span></div>{% endif %}
+{%- endmacro %}
+
+{% macro score(s) -%}
+{%- set t = 'good' if s and s >= 6 else 'warn' if s and s >= 5 else 'bad' -%}
+<span class="score"><b>{{ s or '–' }}<small>/10</small></b>{{ gauge((s or 0) * 10, t) }}</span>
 {%- endmacro %}
 
 {% macro agree(v) -%}
@@ -35,4 +57,8 @@
 
 {% macro change(x) -%}
 {% if x is not none %}<span class="chg {{ 'pos' if x > 0 else 'neg' if x < 0 }}">{{ '+' if x > 0 }}{{ '%.1f'|format(x) }}%</span>{% endif %}
+{%- endmacro %}
+
+{% macro cost(x, label='') -%}
+{% if show_costs() and x is not none %}<span class="cost" title="What the AI calls cost">{{ label }}{{ x|usd }}</span>{% endif %}
 {%- endmacro %}

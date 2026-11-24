@@ -1,16 +1,16 @@
-{% extends "base.html" %}{% from "_ui.html" import icon %}
+{% extends "base.html" %}{% from "_ui.html" import icon, cost %}
 {% block title %}{{ 'How the list was found' if run.kind in ('daily', 'manual') else 'Asking the council' }} · Stock Council{% endblock %}
 {% block main %}
-<div id="live" {% if run.status == 'running' %}data-poll="1"{% endif %}>
+<div id="live" {% if run.status == 'running' %}data-poll="1"{% endif %} style="display:flex;flex-direction:column;gap:inherit">
 <a class="back" href="{{ B }}/">{{ icon('back', 16) }}Today</a>
-<section class="head">
+<div class="pagehead">
   <div>
-    <p class="eyebrow">{{ run.day|day }}{% if run.status == 'running' %} · <span class="livetag"><span class="pulse"></span>live</span>{% endif %}</p>
     <h1>{{ 'How the list was found' if run.kind in ('daily', 'manual') else 'Asking the council' }}</h1>
+    <p>{{ run.day|day }}{% if run.status == 'running' %} · <span class="livetag"><span class="livedot"></span>live</span>{% elif run.finished %} · finished {{ run.finished[11:16] }} UTC{% endif %} {{ cost(run.cost_usd, '· AI cost ') }}</p>
   </div>
-  <a class="howlink" href="{{ B }}/how">{{ icon('how', 16) }}What each step means</a>
-</section>
+  <a class="btn ghost sm" href="{{ B }}/how">{{ icon('how', 15) }}What each step means</a>
+</div>
 {% include "_process.html" %}
 </div>
 {% endblock %}
-{% block scripts %}<script src="/static/live.js?v=2"></script>{% endblock %}
+{% block scripts %}<script src="/static/live.js?v={{ BUILD }}"></script>{% endblock %}

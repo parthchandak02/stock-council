@@ -35,7 +35,7 @@
 
   // ---------- graph ----------
   function chart() {
-    const W = Math.max(300, Math.round(body.clientWidth || 640)), H = W < 500 ? 200 : 230, L = 34, R = 10, T = 10, Bm = 26;
+    const W = Math.max(300, Math.round(body.clientWidth || 640)), H = W < 500 ? 200 : 230, L = 30, R = mode === 'lines' ? (W < 500 ? 44 : 112) : 10, T = 10, Bm = 26;
     dims = {W, L, R};
     const n = Q.length, x = i => L + (n === 1 ? 0 : i * (W - L - R) / (n - 1));
     const shown = GROUPS.filter(g => !hidden.has(g.k));
@@ -60,9 +60,14 @@
     if (mode === 'lines') {
       shown.forEach(g => {
         const pts = Q.map((_, i) => [x(i), value(g.k, i)]).filter(p => p[1] != null);
-        svg += `<polyline points="${pts.map(p => `${p[0].toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ')}" class="ln" style="stroke:${g.color}"/>`;
-        svg += pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${y(p[1]).toFixed(1)}" r="2.6" style="fill:${g.color}"/>`).join('');
+        svg += `<polyline points="${pts.map(p => `${p[0].toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ')}" class="ln ${g.k}" style="stroke:${g.color}"/>`;
+        const lp = pts[pts.length - 1];
+        if (lp) svg += `<circle cx="${lp[0].toFixed(1)}" cy="${y(lp[1]).toFixed(1)}" r="3" style="fill:${g.color}"/>`;
       });
+      // name + value at the end of each line (no legend to look up), nudged apart so they never overlap
+      const ends = shown.map(g => ({g, v: value(g.k, n - 1)})).filter(e => e.v != null).map(e => ({...e, y: y(e.v)})).sort((a, b) => a.y - b.y);
+      for (let k = 1; k < ends.length; k++) if (ends[k].y - ends[k - 1].y < 13) ends[k].y = ends[k - 1].y + 13;
+      ends.forEach(e => { svg += `<text x="${x(n - 1) + 7}" y="${(e.y + 3.5).toFixed(1)}" class="endl" style="fill:${e.g.color}">${W < 500 ? '' : e.g.label + ' '}${f2(e.v)}</text>`; });
     } else {
       // stacked to 100%: the named public holders you subtract show as their own band
       const layers = [...GROUPS.slice(0, 4), {k: 'named', label: 'Named public', color: 'var(--c-named)'}, GROUPS[4]];
@@ -79,7 +84,11 @@
     svg += `<line class="hover" x1="0" x2="0" y1="${T}" y2="${H - Bm}" style="display:none"/></svg>`;
     const legend = (mode === 'lines' ? GROUPS : [...GROUPS.slice(0, 4), {k: 'named', label: 'Named public', color: 'var(--c-named)'}, GROUPS[4]])
       .map(g => `<button type="button" class="lg ${hidden.has(g.k) ? 'off' : ''}" data-k="${g.k}" ${mode === 'stacked' ? 'disabled' : ''}><i style="background:${g.color}"></i>${g.label}</button>`).join('');
-    return `<div class="hc-top"><div class="seg sm"><button type="button" data-mode="lines" class="${mode === 'lines' ? 'on' : ''}">Lines</button><button type="button" data-mode="stacked" class="${mode === 'stacked' ? 'on' : ''}">Stacked</button></div>
+    const li = Q.length - 1, parts = [...GROUPS.slice(0, 4).map(g => [g.label, value(g.k, li), g.color]),
+      ['Named public', exclAt(li), 'var(--c-named)'], ['Pure public', value('pure', li), 'var(--c-pure)']].filter(p => p[1] > 0);
+    const nowbar = `<div class="now" aria-label="${qLabel(Q[li])} split">${parts.map(p => `<div style="flex:${p[1]};background:${p[2]}" title="${p[0]} ${f2(p[1])}%">${p[1] >= 8 ? f2(p[1]) : ''}</div>`).join('')}</div>
+      <div class="legend-row">${parts.map(p => `<span><i class="sw" style="background:${p[2]}"></i>${p[0]} <b class="mono" style="font-weight:500;color:var(--ink)">${f2(p[1])}%</b></span>`).join('')}<span class="faint">${qLabel(Q[li])}</span></div>`;
+    return nowbar + `<div class="hc-top"><div class="seg sm"><button type="button" data-mode="lines" class="${mode === 'lines' ? 'on' : ''}">Lines</button><button type="button" data-mode="stacked" class="${mode === 'stacked' ? 'on' : ''}">Stacked</button></div>
       <div class="legend">${legend}</div></div><div class="hc-wrap">${svg}<div class="tip" hidden></div></div>
       <p class="muted small hc-note">Pure public subtracts ${excluded.size ? `${excluded.size} named holder${excluded.size > 1 ? 's' : ''}` : 'nothing'}; change it in the Table.</p>`;
   }

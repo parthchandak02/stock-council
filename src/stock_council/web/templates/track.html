@@ -2,32 +2,44 @@
 {% block title %}Track record · Stock Council{% endblock %}
 {% block main %}
 <a class="back" href="{{ B }}/history">{{ icon('back', 16) }}History</a>
-<section class="head"><div><p class="eyebrow">Track record</p><h1>How the calls did</h1></div></section>
-<p class="muted lead">Price change from the day of each call to the latest close, adjusted for splits.{% if max_days < 5 %} It's early: the oldest call is {{ max_days }} day{{ 's' if max_days != 1 }} old, so give it a few weeks.{% endif %}</p>
+<div class="pagehead"><div><h1>Track record</h1>
+  <p>Price change from each call to the latest close, split-adjusted.{% if max_days < 5 %} Early days: the oldest call is {{ max_days }} day{{ 's' if max_days != 1 }} old.{% endif %}</p></div></div>
 
 {% if sum.by_call %}
-<div class="nums">
-{% for c in sum.by_call %}{% set k = {'BUY':'buy','SELL':'sell','HOLD':'hold'}.get(c.call, 'split') %}
-  <div class="num {{ 'good' if c.avg > 0 else 'bad' if c.avg < 0 else '' }}"><span class="lbl">{{ verdict({'call': c.call}) }} · {{ c.n }} call{{ 's' if c.n != 1 }}</span><b>{{ '%+.1f'|format(c.avg) }}%</b><span class="hint">{{ c.up }} of {{ c.n }} went up</span></div>
+<section class="panel"><div class="grid top" style="--n:{{ [sum.by_call|length, 4]|min }}">
+{% for c in sum.by_call %}
+  {% set good = (c.avg > 0) if c.call != 'SELL' else (c.avg < 0) %}{% set bad = (c.avg < 0) if c.call != 'SELL' else (c.avg > 0) %}
+  <div><div class="lab"><span>{{ c.n }} call{{ 's' if c.n != 1 }}</span>{{ verdict({'call': c.call}) }}</div>
+    <div class="val {{ 'good' if good else 'bad' if bad }}">{{ '%+.1f'|format(c.avg) }}<small>% avg</small></div>
+    <div class="gauge"><i class="bg-{{ 'good' if c.up / c.n >= 0.5 else 'warn' }}" style="width:{{ (c.up / c.n * 100)|round(0) }}%"></i><u style="left:50%"></u></div>
+    <div class="gl"><span>{{ c.up }} of {{ c.n }} went up</span><span>half</span></div></div>
 {% endfor %}
+</div></section>
+
+<div class="two">
+  <section class="panel">
+    <div class="ph"><h2>{{ icon('history', 16) }}Every call</h2><span class="r">{{ rows|length }}</span></div>
+    <div class="rows">
+    {% for r in rows %}
+      <a class="callrow" href="{{ B }}/stock/{{ r.run_id }}/{{ r.isin }}">
+        <span class="nm"><b>{{ (r.name or r.symbol)|nice }}</b><span>{{ r.day|day }} · {{ M.cur }}{{ '%.2f'|format(r.call_price) }} → {{ M.cur }}{{ '%.2f'|format(r.now) if r.now else '–' }}</span></span>
+        {{ verdict({'call': r.call}) }}
+        <b class="r {{ 'pos' if r.ret > 0 else 'neg' if r.ret < 0 }}">{{ '%+.1f'|format(r.ret) if r.ret == r.ret else '–' }}%</b>
+        {{ icon('chev', 16, 'chev') }}
+      </a>{% endfor %}
+    </div>
+  </section>
+  <section class="panel">
+    <div class="ph"><h2>{{ icon('council', 16) }}Which AI is right most</h2><span class="r">tick = half</span></div>
+    <div class="rows">
+    {% for a in sum.by_ai %}
+      <div class="airow"><b style="font-weight:500;font-size:14px">{{ a.name }}</b>
+        <div class="gauge"><i class="bg-{{ 'good' if a.calls and a.right / a.calls >= 0.5 else 'warn' }}" style="width:{{ ((a.right / a.calls * 100) if a.calls else 0)|round(0) }}%"></i><u style="left:50%"></u></div>
+        <span>{{ a.right }}/{{ a.calls }}</span><span class="{{ 'neg' if a.buy_avg and a.buy_avg < 0 else 'pos' if a.buy_avg and a.buy_avg > 0 }}">{{ '%+.1f'|format(a.buy_avg) ~ '%' if a.buy_avg is not none else '–' }}</span></div>
+    {% endfor %}
+    </div>
+    <div class="panel-foot"><span class="faint small">Right = said buy and it rose, or said sell and it fell. Holds aren't scored. Last column: average move after its buys.</span></div>
+  </section>
 </div>
-
-<h2 class="sub">{{ icon('council', 18) }}Which AI is right most often</h2>
-<p class="muted small">Right = said buy and it rose, or said sell and it fell. Holds aren't scored.</p>
-<div class="tblwrap card"><table class="tbl">
-  <tr><th>AI</th><th>Calls</th><th>Right</th><th>Avg after its buys</th></tr>
-  {% for a in sum.by_ai %}<tr><td>{{ a.name }}</td><td>{{ a.calls }}</td><td>{{ a.right }}</td><td class="{{ 'neg' if a.buy_avg and a.buy_avg < 0 }}">{{ '%+.1f'|format(a.buy_avg) ~ '%' if a.buy_avg is not none else '–' }}</td></tr>{% endfor %}
-</table></div>
-
-<h2 class="sub">{{ icon('history', 18) }}Every call</h2>
-<ul class="stocks">
-{% for r in rows %}
-<li><a class="row" href="{{ B }}/stock/{{ r.run_id }}/{{ r.isin }}">
-  <span class="who"><b>{{ (r.name or r.symbol)|nice }}</b><span class="muted">{{ r.day|day }} · {{ M.cur }}{{ '%.2f'|format(r.call_price) }} → {{ M.cur }}{{ '%.2f'|format(r.now) if r.now else '–' }}</span></span>
-  <span class="vote">{{ verdict({'call': r.call}) }}</span>
-  <span class="score"><b class="{{ 'pos' if r.ret > 0 else 'neg' if r.ret < 0 }}">{{ '%+.1f'|format(r.ret) if r.ret == r.ret else '–' }}%</b></span>
-  {{ icon('chev', 18, 'chev') }}
-</a></li>{% endfor %}
-</ul>
-{% else %}<div class="empty card">No calls yet.</div>{% endif %}
+{% else %}<section class="panel empty muted">No calls yet.</section>{% endif %}
 {% endblock %}

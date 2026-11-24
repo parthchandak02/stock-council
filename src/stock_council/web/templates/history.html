@@ -1,29 +1,42 @@
-{% extends "base.html" %}{% from "_ui.html" import icon, verdict %}
+{% extends "base.html" %}{% from "_ui.html" import icon, verdict, cost %}
 {% block title %}History · Stock Council{% endblock %}
 {% block main %}
-<section class="head"><div><p class="eyebrow">History</p><h1>Every run, kept</h1></div></section>
-<a class="card trackcta" href="{{ B }}/track">{{ icon('target', 20) }}<span><b>Track record</b><span class="muted small">How every call has done since, and which AI is right most often</span></span>{{ icon('chev', 18, 'chev') }}</a>
-{% if orders %}
-<details class="fold card" id="orders"><summary>{{ icon('mail', 18) }}<b>Broker orders prepared</b><span class="muted small">{{ orders|length }}</span>{{ icon('chevdown', 16, 'tw') }}</summary>
-  <ul class="olog pad">{% for o in orders %}<li><span class="chip {{ o.side }}">{{ 'Buy' if o.side == 'buy' else 'Sell' }}</span> <b>{{ (o.name or o.symbol)|nice }}</b> · {{ o.account }} · {{ o.created|day }}<br><span class="muted small">{% for l in o.lines %}{{ l.qty }} × {{ M.cur }}{{ '%g'|format(l.price) }}{{ ', ' if not loop.last }}{% endfor %}</span></li>{% endfor %}</ul>
-</details>
-{% endif %}
-<ul class="stocks">
-{% for r in runs %}
-<li><a class="row" href="{{ B }}/run/{{ r.id }}">
-  <span class="kind">{{ icon('volume' if r.kind != 'on_demand' else 'search', 18) }}</span>
-  <span class="who">
-    {% if r.kind == 'on_demand' %}<b>{{ ((r.pick or {}).name or 'Stock check')|nice }}</b>{% elif r.kind == 'custom' %}<b>Council on {{ r.n }} picks</b>{% else %}<b>Screen{{ ' (manual)' if r.kind == 'manual' }}</b>{% endif %}
-    <span class="muted">{{ r.day|day }}{% if r.kind != 'on_demand' %} · {{ r.n }} stocks{% endif %}{% if r.cost_usd %} · ${{ '%.2f'|format(r.cost_usd) }}{% endif %}</span>
-  </span>
-  <span class="vote">
-    {% if r.status == 'running' %}<span class="chip none">{{ icon('spin', 14, 'spin') }}Running</span>
-    {% elif r.status == 'failed' %}<span class="chip sell">{{ icon('alert', 14) }}Failed</span>
-    {% elif r.kind == 'on_demand' %}{{ verdict((r.pick or {}).verdict) }}
-    {% else %}<span class="tally"><span class="buy">{{ r.buys }} buy</span>{% if r.sells %} · <span class="sell">{{ r.sells }} sell</span>{% endif %}</span>{% endif %}
-  </span>
-  {{ icon('chev', 18, 'chev') }}
-</a></li>
-{% else %}<li class="empty small">Nothing yet.</li>{% endfor %}
-</ul>
+<div class="pagehead"><div><h1>History</h1><p>Every run, kept</p></div>
+  <a class="btn ghost" href="{{ B }}/track">{{ icon('target', 15) }}Track record</a></div>
+
+<div class="two">
+  <section class="panel">
+    <div class="ph"><h2>{{ icon('history', 16) }}Runs</h2><span class="r">{{ runs|length }}</span></div>
+    <div class="rows">
+    {% for r in runs %}
+      <a class="runrow" href="{{ B }}/run/{{ r.id }}">
+        <span class="d">{{ r.day|day }}</span>
+        <span class="nm">
+          {% if r.kind == 'on_demand' %}<b>{{ ((r.pick or {}).name or 'Stock check')|nice }}</b><span>stock check{{ ' · ' ~ (r.cost_usd|usd) if show_costs() and r.cost_usd }}</span>
+          {% elif r.kind == 'custom' %}<b>Council on {{ r.n }} picks</b><span>from the Screener{{ ' · ' ~ (r.cost_usd|usd) if show_costs() and r.cost_usd }}</span>
+          {% else %}<b>Evening screen{{ ' (manual)' if r.kind == 'manual' }}</b><span>{{ r.n }} stocks{{ ' · ' ~ (r.cost_usd|usd) if show_costs() and r.cost_usd }}</span>{% endif %}
+        </span>
+        <span class="vote">
+          {% if r.status == 'running' %}<span class="chip none">{{ icon('spin', 13, 'spin') }}Running</span>
+          {% elif r.status == 'failed' %}<span class="chip sell">Failed</span>
+          {% elif r.kind == 'on_demand' %}{{ verdict((r.pick or {}).verdict) }}
+          {% else %}<span class="tally"><span class="buy">{{ r.buys }} buy</span>{% if r.sells %} · <span class="sell">{{ r.sells }} sell</span>{% endif %}</span>{% endif %}
+        </span>
+        {{ icon('chev', 16, 'chev') }}
+      </a>
+    {% else %}<div class="empty small muted">Nothing yet.</div>{% endfor %}
+    </div>
+  </section>
+
+  <div class="col">
+    <section class="panel">
+      <div class="ph"><h2>{{ icon('mail', 16) }}Broker orders prepared</h2><span class="r">{{ orders|length }}</span></div>
+      {% if orders %}<div class="rows">{% for o in orders %}
+        <div style="grid-template-columns:auto minmax(0,1fr) auto"><span class="chip {{ o.side }}">{{ 'Buy' if o.side == 'buy' else 'Sell' }}</span>
+          <span class="nm"><b>{{ (o.name or o.symbol)|nice }}</b><span>{% for l in o.lines %}{{ l.qty }}×{{ M.cur }}{{ '%g'|format(l.price) }}{{ ', ' if not loop.last }}{% endfor %}</span></span>
+          <span class="mono faint" style="font-size:12px;text-align:right">{{ o.account }}<br>{{ o.created|day }}</span></div>
+      {% endfor %}</div>{% else %}<div class="pb muted small">Orders drafted from a stock page show up here.</div>{% endif %}
+    </section>
+  </div>
+</div>
 {% endblock %}

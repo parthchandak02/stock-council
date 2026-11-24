@@ -113,6 +113,35 @@ def key_numbers(sheet: dict) -> list[dict]:
     out.append({"group": "Value", "label": "P/E", "value": _x(pe, 1), "tone": _tone(pe, 25, 40, False), "hint": f"P/B {_x(f.get('pb'))} · PEG {_x(f.get('peg'))}"})
     out.append({"group": "Value", "label": "ROE", "value": _pct(roe), "tone": _tone(roe, 15, 12), "hint": f"3-yr avg {_pct(f.get('roe_3y_avg_pct'))}"})
     out.append({"group": "Value", "label": "ROCE", "value": _pct(roce), "tone": _tone(roce, 15, 10), "hint": f"ROA {_pct(f.get('roa_pct'))}"})
+
+    # Each tile gets a bar (where the value sits) and a tick (the limit it is judged against).
+    pl_v = pl.get("pledged_pct_of_promoter_shares") if pl else None
+    raw = {
+        "Profit turning into cash": (None if lender else conv, 0, 160, 80, "0", "80% healthy"),
+        "Debt / equity": (None if lender else de, 0, 1.5, 1.0, "0", "limit 1.0"),
+        "Cash cycle": (None if wc is None else max(wc, 0), 0, 180, 60, "0", "60 d good"),
+        "Promoter shares pledged": (pl_v or 0, 0, 25, 10, "0", "10% risk"),
+        "Delivery today": (dl, 0, 100, dla, "0", "30-day avg"),
+        "RSI (14 days)": (rsi, 0, 100, None, "0", "30 to 70 normal"),
+        "Sales growth (3 yr)": (g, 0, 40, 15, "0", "15% good"),
+        "P/E": (pe, 0, 60, 40, "0", "limit 40"),
+        "ROE": (roe, 0, 40, 12, "0", "limit 12%"),
+        "ROCE": (roce, 0, 40, 15, "0", "15% good"),
+    }
+    for n in out:
+        r = raw.get(n["label"])
+        if r and r[0] is not None:
+            v, lo, hi, lim, left, right = r
+            pos = lambda x: max(0.0, min(100.0, (x - lo) / (hi - lo) * 100))
+            n["gauge"] = {"pct": round(pos(v), 1), "lim": None if lim is None else round(pos(lim), 1), "l": left, "r": right}
+            if n["label"] == "RSI (14 days)":
+                n["gauge"]["band"] = [30, 70]
+        num, _, unit = n["value"].partition(" ")
+        if not any(c.isdigit() for c in num):
+            num, unit = n["value"], ""
+        elif num.endswith("%"):
+            num, unit = num[:-1], ("% " + unit).strip()
+        n["num"], n["unit"] = num, unit.strip("()") if unit.startswith("(") else unit
     return out
 
 

@@ -1,40 +1,55 @@
 {% extends "base.html" %}{% from "_ui.html" import icon %}
 {% block title %}How it works · Stock Council{% endblock %}
 {% block main %}
-<section class="intro">
-  <p class="eyebrow">How it works</p>
-  <h1>Unusual trading, checked by facts, judged by {{ st.models|length }} AIs.</h1>
-  <p class="lead muted">Every weekday evening it looks at every company on {{ M.exchanges }} and keeps the few worth a closer look.</p>
+{% set fn = (run or {}).funnel or {} %}
+<div class="pagehead">
+  <div><h1>How it works</h1><p>Unusual trading, checked by facts, judged by {{ st.models|length }} AIs.</p></div>
+  {% if run %}<a class="btn ghost" href="{{ B }}/run/{{ run.id }}">{{ icon('play', 15) }}Watch the last run</a>{% endif %}
+</div>
+
+<section class="panel"><div class="flow">
+  <div><h3>{{ icon('download', 17) }}Collect</h3><div class="n">{{ (fn.companies or (5900 if IS_US else 5000))|num }}<small>companies</small></div>
+    <p>{% if IS_US %}Closing price and volume for every US-listed company, plus SEC filings.{% else %}Closing price, volume and delivery from NSE and BSE, every evening.{% endif %}</p></div>
+  <div><h3>{{ icon('volume', 17) }}Spot the shock</h3><div class="n">{{ (run.spikes if run else '–') }}<small>volume spikes</small></div>
+    <p>A week of volume over <b>{{ st.filters.volume_spike_multiple|round(1) }}×</b> its 1-year average. Big money often shows up as volume first.</p></div>
+  <div><h3>{{ icon('scale', 17) }}Check the business</h3><div class="n">{{ (fn.passed or [])|length if run else '–' }}<small>pass</small></div>
+    <div class="filters"><span class="tag">Mkt cap &gt; {{ M.cur }}{{ st.filters.min_market_cap_cr|int }} {{ M.unit_label }}</span><span class="tag">P/E &lt; {{ st.filters.max_pe|int }}</span><span class="tag">ROE &gt; {{ st.filters.min_roe_pct|int }}%</span><span class="tag">D/E &lt; {{ st.filters.max_debt_to_equity }}</span></div></div>
+  <div><h3>{{ icon('council', 17) }}Ask the council</h3><div class="n">{{ st.models|length }}<small>AI votes</small></div>
+    <p>Same fact sheet and news for every AI. Each answers the same questions; votes are counted in code.</p></div>
+</div></section>
+
+<div class="two even">
+  <section class="panel">
+    <div class="ph"><h2>{{ icon('target', 16) }}Reading a result</h2></div>
+    <div class="rows">
+      {% for pat, chip, txt in [('bbbbbbb','buy','most AIs say buy or buy in steps'), ('hhhhbhh','hold','most AIs say wait'), ('sssshss','sell','most say avoid or sell'), ('bbbhhss','split','no majority: read the reasons')] %}
+      <div class="readrow"><span class="votes">{% for c in pat %}<i class="{{ {'b':'buy','h':'hold','s':'sell'}[c] }}"></i>{% endfor %}</span><span class="chip {{ chip }}">{{ chip|title }}</span><span class="muted" style="font-size:14px">{{ txt }}</span></div>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="panel">
+    <div class="ph"><h2>{{ icon('clock', 16) }}When</h2></div>
+    <div class="rows">
+      <div class="whenrow"><b style="font-weight:600;font-size:14px">{{ 'Weekdays' if st.schedule.days == [0,1,2,3,4] else 'Chosen days' }} {{ st.schedule.time }}</b><span class="muted" style="font-size:14px">{{ 'New York' if IS_US else 'India' }} time, after the market closes{% if not st.schedule.enabled %} (paused){% endif %}</span></div>
+      {% if st.whatsapp.enabled %}<div class="whenrow"><b style="font-weight:600;font-size:14px">WhatsApp</b><span class="muted" style="font-size:14px">a short list to the family group</span></div>{% endif %}
+      <div class="whenrow"><b style="font-weight:600;font-size:14px">Any time</b><span class="muted" style="font-size:14px">check one stock from Today</span></div>
+    </div>
+  </section>
+</div>
+
+<div class="two even">
+  <section class="panel">
+    <div class="ph"><h2>{{ icon('shield', 16) }}Facts</h2><span class="r">from filings</span></div>
+    <div class="pb muted" style="font-size:14px">Computed from official filings, the same every time: cash flow, debt, promoter pledge, who's buying, delivery, ratios.</div>
+  </section>
+  <section class="panel">
+    <div class="ph"><h2>{{ icon('council', 16) }}Opinions</h2><span class="r">from AI</span></div>
+    <div class="pb muted" style="font-size:14px">Only the judgement comes from AI: outlook, risks, the call. When they split, the page says so.</div>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="ph"><h2>{{ icon('council', 16) }}The council</h2>{% if show_costs() %}<span class="r">about {{ (avg_stock or 0.06)|usd }} per stock</span>{% endif %}</div>
+  <div class="grid c7">{% for m in st.models %}<div><b style="font-weight:600;font-size:14px">{{ m.name }}</b><span class="faint mono" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.model.split('/')[-1] }}</span></div>{% endfor %}</div>
 </section>
-
-<ol class="how">
-  <li class="card"><span class="hn">1</span>{{ icon('download', 28, '', 'd') }}<h3>Collect</h3><p>{% if IS_US %}The day's closing price and volume for ~5,900 US companies, plus SEC filings.{% else %}The day's closing price, volume and delivery for ~5,000 companies, straight from NSE and BSE.{% endif %}</p></li>
-  <li class="card"><span class="hn">2</span>{{ icon('volume', 28, '', 'd') }}<h3>Spot the shock</h3><p>Keep stocks trading over <b>{{ st.filters.volume_spike_multiple|round(1) }}×</b> their usual volume this week. Big money often shows up as volume first.</p></li>
-  <li class="card"><span class="hn">3</span>{{ icon('scale', 28, '', 'd') }}<h3>Check the business</h3><p>Drop anything small, loss-making, expensive or in debt:</p>
-    <p class="filters"><span class="tag">Market cap &gt; {{ M.cur }}{{ st.filters.min_market_cap_cr|int }} {{ M.unit_label }}</span><span class="tag">P/E &lt; {{ st.filters.max_pe|int }}</span><span class="tag">ROE &gt; {{ st.filters.min_roe_pct|int }}%</span><span class="tag">Debt/equity &lt; {{ st.filters.max_debt_to_equity }}</span></p></li>
-  <li class="card"><span class="hn">4</span>{{ icon('council', 28, '', 'd') }}<h3>Ask the council</h3><p>Each survivor gets a fact sheet and a news search. All AIs read the same facts and vote <b>Buy, Hold or Sell</b> with a score out of 10.</p></li>
-</ol>
-
-<div class="split2">
-  <div class="card"><h3>{{ icon('shield', 22, '', 'd') }}Facts</h3><p class="muted">Computed from official filings, the same every time: cash flow, debt, promoter pledge, who's buying, delivery, ratios.</p></div>
-  <div class="card"><h3>{{ icon('council', 22, '', 'd') }}Opinions</h3><p class="muted">Only the judgement comes from AI: outlook, risks, the call. When they split, the page says so.</p></div>
-</div>
-
-<h2 class="sub">The council</h2>
-<p class="members">{% for m in st.models %}<span class="member"><span class="dot hold">{{ short_name(m.name) }}</span>{{ m.name }}</span>{% endfor %}</p>
-
-<h2 class="sub">Reading a result</h2>
-<ul class="read">
-  <li><span class="chip buy">{{ icon('up', 14) }}Buy</span> most AIs say buy or buy in steps</li>
-  <li><span class="chip hold">{{ icon('flat', 14) }}Hold</span> most say wait</li>
-  <li><span class="chip sell">{{ icon('down', 14) }}Sell</span> most say avoid or sell</li>
-  <li><span class="chip split">{{ icon('split', 14) }}Split</span> no majority: read the reasons</li>
-</ul>
-
-<div class="card when">
-  <p>{{ icon('clock', 18) }}<span>Runs <b>{{ 'weekdays' if st.schedule.days == [0,1,2,3,4] else 'on chosen days' }} at {{ st.schedule.time }}</b> {{ 'New York' if IS_US else 'India' }} time, after the market closes.</span></p>
-  {% if st.whatsapp.enabled %}<p>{{ icon('council', 18) }}<span>A short list goes to WhatsApp.</span></p>{% endif %}
-  <p>{{ icon('search', 18) }}<span>Any stock can be checked any time from the Today page.</span></p>
-</div>
-{% if run %}<p class="center"><a class="btn" href="{{ B }}/run/{{ run.id }}">{{ icon('target', 16) }}See the latest run step by step</a></p>{% endif %}
 {% endblock %}

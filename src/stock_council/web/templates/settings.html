@@ -1,74 +1,108 @@
-{% extends "base.html" %}{% from "_ui.html" import icon %}
+{% extends "base.html" %}{% from "_ui.html" import icon, gauge %}
 {% block title %}Settings · Stock Council{% endblock %}
 {% block main %}
-<section class="head"><div><p class="eyebrow">Settings</p><h1>Screen and council</h1></div></section>
-{% if saved %}<div class="note good">{{ icon('check', 16) }}<span>Saved. The next run uses it.{% if sent %} A verify link went to <b>{{ sent }}</b>: click it once to start receiving the email.{% endif %}</span></div>{% endif %}
-<form method="post" action="{{ B }}/settings" class="settings">
-  <h2 class="sub" id="schedule">{{ icon('clock', 18) }}Evening run</h2>
+<form method="post" action="{{ B }}/settings" class="settings" style="display:flex;flex-direction:column;gap:inherit">
+<div class="pagehead"><div><h1>Settings</h1><p>{{ M.name }} · saved for everyone using the site</p></div>
+  <button class="btn">{{ icon('check', 15) }}Save</button></div>
+{% if saved %}<div class="note good">{{ icon('check', 16) }}<span>Saved. The next run uses it.{% if sent %} A verify link went to <b>{{ sent }}</b>.{% endif %}</span></div>{% endif %}
+
+<div class="two even">
+<div class="col">
   {% set sc = st.schedule %}
-  <div class="fields card">
-    <label><span><b>Run automatically</b><span class="muted small">Screen, council and the evening message, once a day</span></span>
-      <input type="checkbox" name="sched_on" value="1" {{ 'checked' if sc.enabled }} class="switch"></label>
-    <label><span><b>Time</b><span class="muted small">India time; exchange files are usually out by 7 pm</span></span>
-      <select name="sched_time" aria-label="Run time">{% for t in times %}<option {{ 'selected' if t == sc.time }}>{{ t }}</option>{% endfor %}</select></label>
-    <div class="row-days"><span><b>Days</b><span class="muted small">Holidays are skipped by themselves</span></span>
-      <span class="days">{% for d in daynames %}<label class="day"><input type="checkbox" name="sched_days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in sc.days }}><span>{{ d }}</span></label>{% endfor %}</span></div>
-    <label><span><b>Stocks sent to the council</b><span class="muted small">At most this many each evening (about $0.06 each)</span></span>
-      <input type="number" name="max_stocks" min="1" max="30" step="1" value="{{ sc.max_stocks }}"></label>
-  </div>
+  <section class="panel" id="schedule">
+    <div class="ph"><h2>{{ icon('clock', 16) }}Evening run</h2></div>
+    <div class="set">
+      <label><span class="t"><b>Run automatically</b><span>Screen, council and {{ 'WhatsApp' if st.whatsapp.enabled else 'the site' }}, once a day</span></span>
+        <input type="checkbox" name="sched_on" value="1" {{ 'checked' if sc.enabled }} class="switch"></label>
+      <label><span class="t"><b>Time</b><span>{{ 'New York' if IS_US else 'India' }} time</span></span>
+        <select name="sched_time" aria-label="Run time">{% for t in times %}<option {{ 'selected' if t == sc.time }}>{{ t }}</option>{% endfor %}</select></label>
+      <div class="days-row"><span class="t"><b>Days</b><span>Holidays are skipped</span></span>
+        <span class="days">{% for d in daynames %}<label class="day"><input type="checkbox" name="sched_days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in sc.days }}><span>{{ d[:2] }}</span></label>{% endfor %}</span></div>
+      <label><span class="t"><b>Stocks sent to the council</b><span>At most, per evening</span></span>
+        <input type="number" name="max_stocks" min="1" max="30" step="1" value="{{ sc.max_stocks }}"></label>
+    </div>
+  </section>
 
-  <h2 class="sub" id="whatsapp">{{ icon('council', 18) }}Evening WhatsApp</h2>
-  <div class="fields card">
-    <label><span><b>Post the evening list on WhatsApp</b><span class="muted small">To the group "Invest · Stock &amp; ETF Screen" (Dad, Parth, Hermes), sent by Hermes</span></span>
-      <input type="checkbox" name="wa_on" value="1" {{ 'checked' if st.whatsapp.enabled }} class="switch"></label>
-  </div>
+  <section class="panel" id="whatsapp">
+    <div class="ph"><h2>{{ icon('council', 16) }}Messages</h2></div>
+    {% set em = st.email %}
+    <div class="set">
+      <label><span class="t"><b>Post the evening list on WhatsApp</b><span>To "Invest · Stock &amp; ETF Screen", sent by Hermes</span></span>
+        <input type="checkbox" name="wa_on" value="1" {{ 'checked' if st.whatsapp.enabled }} class="switch"></label>
+      <label><span class="t"><b>Evening email</b><span>Off for now: Cloudflare sending needs a paid plan</span></span>
+        <input type="checkbox" name="email_on" value="1" {{ 'checked' if em.enabled }} class="switch"></label>
+    </div>
+    <details class="peek"><summary>{{ icon('mail', 14) }}Email addresses · {{ (em.to + em.cc)|length }}{{ icon('chevdown', 14, 'tw') }}</summary>
+      <div style="display:grid;gap:10px">
+        <label class="field">To, comma separated<textarea name="email_to" rows="2">{{ em.to|join(', ') }}</textarea></label>
+        <label class="field">CC<textarea name="email_cc" rows="2">{{ em.cc|join(', ') }}</textarea></label>
+        {% if addr_status is not none and (em.to or em.cc) %}<div class="addr">{% for a in em.to + em.cc %}{% set ok = addr_status.get(a|lower) %}<span class="chip {{ 'buy' if ok else 'hold' }}">{{ a }} · {{ 'verified' if ok else 'not verified' }}</span>{% endfor %}</div>{% endif %}
+      </div>
+    </details>
+  </section>
 
-  <h2 class="sub" id="email">{{ icon('mail', 18) }}Evening email</h2>
-  {% set em = st.email %}
-  <div class="fields card stack">
-    <label class="inline"><span><b>Send the evening email</b><span class="muted small">Off for now: Cloudflare sending needs a paid plan</span></span>
-      <input type="checkbox" name="email_on" value="1" {{ 'checked' if em.enabled }} class="switch"></label>
-    <label><span><b>To</b><span class="muted small">Comma separated</span></span>
-      <textarea name="email_to" rows="2">{{ em.to|join(', ') }}</textarea></label>
-    <label><span><b>CC</b><span class="muted small">Optional</span></span>
-      <textarea name="email_cc" rows="2">{{ em.cc|join(', ') }}</textarea></label>
-    {% if addr_status is not none and (em.to or em.cc) %}
-    <div class="addr"><span class="muted small">Delivery</span>
-      {% for a in em.to + em.cc %}{% set ok = addr_status.get(a|lower) %}
-      <span class="chip {{ 'buy' if ok else 'hold' }}">{{ icon('check' if ok else 'clock', 13) }}{{ a }} · {{ 'verified' if ok else ('waiting for verify click' if (a|lower) in addr_status else 'not added yet') }}</span>
-      {% endfor %}</div>
-    {% endif %}
-  </div>
+  <section class="panel" id="costs">
+    <div class="ph"><h2>{{ icon('wallet', 16) }}AI costs</h2><span class="r">last 30 days</span></div>
+    <div class="set">
+      <label><span class="t"><b>Show costs on the site</b><span>What each AI call cost, on stock, run and history pages</span></span>
+        <input type="checkbox" name="costs_on" value="1" {{ 'checked' if st.telemetry.show_costs }} class="switch"></label>
+    </div>
+    <div class="grid c3 stats" style="border-radius:0">
+      <div><div class="lab"><span>Today</span></div><div class="val">{{ spend.today|usd }}</div></div>
+      <div><div class="lab"><span>This month</span></div><div class="val">{{ spend.month|usd }}</div>
+        {% if key and key.limit %}{% set used = key.usage_monthly if key.usage_monthly is not none else key.usage %}{{ gauge((used or 0) / key.limit * 100, 'good' if (used or 0) < key.limit * 0.7 else 'warn', None, 'OpenRouter ' ~ ((used or 0)|usd), 'cap $' ~ key.limit|int) }}{% endif %}</div>
+      <div><div class="lab"><span>Per stock</span></div><div class="val">{{ spend.per_stock|usd }}</div><div class="hint">{{ spend.stocks }} stocks judged</div></div>
+    </div>
+    {% if spend.days %}{% set dmax = spend.days|map(attribute='cost')|max or 1 %}
+    <div class="pb"><div class="spendbar" aria-label="Spend per day">{% for d in spend.days %}<i style="height:{{ [(d.cost or 0) / dmax * 100, 3]|max }}%" title="{{ d.day }}: {{ d.cost|usd }} · {{ d.calls }} calls"></i>{% endfor %}</div>
+      <div class="gl" style="margin-top:4px"><span>{{ spend.days[0].day[5:] }}</span><span>{{ spend.days[-1].day[5:] }}</span></div></div>{% endif %}
+    <div class="rows">
+      <div class="spendrow" style="padding-block:7px"><span class="faint" style="text-align:left;font-family:var(--sans);font-size:12px">Model</span><span class="faint" style="font-size:11.5px">Calls</span><span class="faint" style="font-size:11.5px">Avg / call</span><span class="faint" style="font-size:11.5px">Total</span></div>
+      {% for r in spend.by_model %}
+      <div class="spendrow"><span class="nm"><b>{{ r.name }}</b><span>{{ r.model }}{% if r.tin %} · {{ '{:,}'.format(((r.tin or 0) / r.calls)|int) }} in / {{ '{:,}'.format(((r.tout or 0) / r.calls)|int) }} out{% endif %}{% if r.failed %} · {{ r.failed }} failed{% endif %}</span></span>
+        <span>{{ r.calls }}</span><span>{{ r.avg_cost|usd }}</span><span class="c">{{ r.cost|usd }}</span></div>
+      {% else %}<div class="muted small">No AI calls yet.</div>{% endfor %}
+    </div>
+    <div class="panel-foot"><span class="faint small">Exact cost of each call, as reported by OpenRouter. Tokens are logged from 24 Nov on.</span></div>
+  </section>
+</div>
 
-  <h2 class="sub">{{ icon('scale', 18) }}Filters</h2>
-  <div class="fields card">
-  {% for k, pair in FILTER_LABELS.items() %}{% set title, desc = pair %}
-    <label><span><b>{{ title }}</b><span class="muted small">{{ desc.format(v=st.filters[k]) }}</span></span>
-      <input type="number" step="any" name="{{ k }}" value="{{ st.filters[k] }}" inputmode="decimal"></label>
-  {% endfor %}
-  </div>
+<div class="col">
+  <section class="panel">
+    <div class="ph"><h2>{{ icon('filter', 16) }}Filters</h2><span class="r">Dad's screen</span></div>
+    <div class="set">
+    {% for k, pair in FILTER_LABELS.items() %}{% set title, desc = pair %}
+      <label><span class="t"><b>{{ title }}</b><span>{{ desc.format(v=st.filters[k]) }}</span></span>
+        <input type="number" step="any" name="{{ k }}" value="{{ st.filters[k] }}" inputmode="decimal"></label>
+    {% endfor %}
+    </div>
+  </section>
 
-  <h2 class="sub">{{ icon('council', 18) }}Question for the council</h2>
-  <p class="muted small">Every AI gets this, the fact sheet and the news. Changing it makes new scores less comparable with old ones.</p>
-  <textarea name="prompt" rows="12">{{ st.prompt }}</textarea>
-
-  <details class="fold card">
-    <summary>{{ icon('settings', 18) }}<b>Council members</b><span class="muted small">{{ st.models|length }} AIs</span>{{ icon('chevdown', 16, 'tw') }}</summary>
-    <p class="muted small">One per line: <code>Name | OpenRouter model id</code></p>
-    <textarea name="models" rows="8" class="mono">{{ models_text }}</textarea>
+  <details class="panel prompt" id="prompt">
+    <summary class="ph"><h2>{{ icon('council', 16) }}Question for the council</h2><span class="r">{{ st.prompt.count('\n') + 1 }} lines {{ icon('chevdown', 14, 'tw') }}</span></summary>
+    <p class="faint small" style="padding:10px 16px 0">Every AI gets this, the fact sheet and the news. Changing it makes new scores less comparable with old ones.</p>
+    <textarea name="prompt" rows="14" aria-label="Question for the council">{{ st.prompt }}</textarea>
   </details>
 
-  <h2 class="sub" id="broker">{{ icon('mail', 18) }}Broker orders</h2>
-  <div class="fields card stack">
-    <label><span><b>Broker email addresses</b><span class="muted small">Comma separated</span></span>
-      <textarea name="broker_to" rows="2">{{ st.broker_to }}</textarea></label>
-    <label><span><b>Account codes</b><span class="muted small">One per line, as they go in the subject</span></span>
-      <textarea name="accounts" rows="3">{{ st.accounts|join('\n') }}</textarea></label>
-    <label><span><b>Gmail account to send from</b><span class="muted small">Opens the draft in this account</span></span>
-      <input name="gmail_account" type="email" value="{{ st.gmail_account }}"></label>
-  </div>
+  <details class="panel" id="members">
+    <summary class="ph"><h2>{{ icon('settings', 16) }}Council members</h2><span class="r">{{ st.models|length }} AIs {{ icon('chevdown', 14, 'tw') }}</span></summary>
+    <div class="pb" style="display:grid;gap:8px"><p class="faint small">One per line: <code>Name | OpenRouter model id</code></p>
+      <textarea name="models" rows="8" class="mono" style="font-family:var(--mono);font-size:13px">{{ models_text }}</textarea></div>
+  </details>
 
-  <div class="actions"><button class="btn">{{ icon('check', 16) }}Save</button>
-  <button class="btn ghost" name="reset" value="prompt">Restore original question</button></div>
+  {% if not IS_US %}
+  <details class="panel" id="broker">
+    <summary class="ph"><h2>{{ icon('mail', 16) }}Broker orders</h2><span class="r">{{ st.accounts|length }} accounts {{ icon('chevdown', 14, 'tw') }}</span></summary>
+    <div class="pb" style="display:grid;gap:12px">
+      <label class="field">Broker email addresses, comma separated<textarea name="broker_to" rows="2">{{ st.broker_to }}</textarea></label>
+      <label class="field">Account codes, one per line<textarea name="accounts" rows="3">{{ st.accounts|join('\n') }}</textarea></label>
+      <label class="field">Gmail account to send from<input name="gmail_account" type="email" value="{{ st.gmail_account }}"></label>
+    </div>
+  </details>
+  {% endif %}
+</div>
+</div>
+
+<div class="savebar"><button class="btn ghost" name="reset" value="prompt">Restore original question</button><button class="btn">{{ icon('check', 15) }}Save</button></div>
 </form>
 {% endblock %}

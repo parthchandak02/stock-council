@@ -125,7 +125,7 @@ def analyse(run_id: int, isin: str, symbol: str, st: dict) -> float:
             except Exception:
                 pass
         res = council.run(
-            sheet, md, prompt=st["prompt"], members=st["models"],
+            sheet, md, prompt=st["prompt"], members=st["models"], ctx={"run_id": run_id, "isin": isin},
             on_news=lambda n: _pick_set(conn, run_id, isin, status="council", news=n),
             on_opinion=lambda ops: _pick_set(conn, run_id, isin, opinions=ops, verdict=council.tally(
                 [o for o in ops if not o.get("pending")])))

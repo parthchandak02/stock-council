@@ -1,86 +1,88 @@
-{% from "_ui.html" import icon, verdict, dots, agree, tone_of %}
+{% from "_ui.html" import icon, verdict, dots, agree, tone_of, cost %}
 {% set stages = ['download', 'scan', 'filter', 'council', 'done'] %}
 {% set at = stages.index(run.stage) if run.stage in stages else 4 %}
 {% set fn = run.funnel or {} %}
+{% set screen = run.kind in ('daily', 'manual') %}
 {% macro state(i) -%}{{ 'done' if at > i or run.status == 'done' else ('now' if at == i and run.status == 'running' else ('fail' if run.status == 'failed' and at == i else 'todo')) }}{%- endmacro %}
-{% macro mark(i, ic) -%}
-<span class="mark {{ state(i) }}">{% if state(i) == 'done' %}{{ icon('check', 16) }}{% elif state(i) == 'now' %}{{ icon('spin', 16, 'spin') }}{% elif state(i) == 'fail' %}{{ icon('x', 16) }}{% else %}{{ icon(ic, 16) }}{% endif %}</span>
-{%- endmacro %}
+{% set ndone = picks|selectattr('status', 'equalto', 'done')|list|length %}
 
 {% if run.status == 'failed' %}<div class="note bad">{{ icon('alert', 16) }}<span>Stopped: {{ (run.error or 'unknown error')[:200] }}</span></div>{% endif %}
 
-<ol class="steps">
-{% if run.kind in ('daily', 'manual') %}
-  <li class="step {{ state(0) }}">{{ mark(0, 'download') }}
-    <div><h3>Collect the day's trading</h3>
-    <p class="muted">Closing price, volume and delivery for every company on NSE and BSE.</p>
-    {% if fn.companies %}<p class="result"><b>{{ fn.companies|num }}</b> companies traded</p>{% endif %}</div></li>
+{% set items = [('Download', 'files from ' ~ M.exchanges, 0), ('Scan', (fn.companies|num ~ ' companies') if fn.companies else '', 1),
+                ('Filter', ((fn.spikes ~ ' spikes') if fn.spikes is defined else ''), 2),
+                ('Council', (ndone ~ ' of ' ~ picks|length) if picks else '', 3), ('Done', (picks|length ~ ' judged') if run.status == 'done' else '', 4)] %}
+<section class="panel"><div class="stages">
+{% for name, sub, i in items if screen or i >= 3 %}
+  {% set stt = state(i) %}
+  {% set w = 100 if stt == 'done' else ((ndone / (picks|length or 1) * 100) if i == 3 and stt == 'now' else (((fn.checked or 0) / (fn.spikes or 1) * 100) if i == 2 and stt == 'now' else (30 if stt == 'now' else 0))) %}
+  <div class="{{ stt }}"><div class="bar"><i class="{{ 'pulse' if stt == 'now' }}" style="width:{{ [w, 4 if stt == 'now' else 0]|max }}%"></i></div><b>{{ name }}</b><span>{{ sub or ' ' }}</span></div>
+{% endfor %}
+</div></section>
 
-  <li class="step {{ state(1) }}">{{ mark(1, 'volume') }}
-    <div><h3>Find volume shocks</h3>
-    <p class="muted">Keep stocks whose last-week volume is over {{ run.filters.volume_spike_multiple|round(1) }}× their usual.</p>
-    {% if fn.spikes is defined %}<p class="result"><b>{{ fn.spikes }}</b> volume spikes</p>{% endif %}</div></li>
-
-  <li class="step {{ state(2) }}">{{ mark(2, 'scale') }}
-    <div><h3>Check the business</h3>
-    <p class="muted">Each spike must pass all of these:</p>
-    <p class="filters">
-      <span class="tag">Market cap &gt; {{ M.cur }}{{ run.filters.min_market_cap_cr|int }} {{ M.unit_label }}</span>
-      <span class="tag">P/E &lt; {{ run.filters.max_pe|round(0)|int }}</span>
-      <span class="tag">ROE &gt; {{ run.filters.min_roe_pct|round(0)|int }}%</span>
-      <span class="tag">Debt/equity &lt; {{ run.filters.max_debt_to_equity }}</span>
-    </p>
-    {% if fn.spikes %}
-      {% set pct = (100 * (fn.checked or 0) / fn.spikes)|round(0) %}
-      {% if state(2) == 'now' %}<div class="bar"><span style="width:{{ pct }}%"></span></div><p class="muted small">{{ fn.checked or 0 }} of {{ fn.spikes }} checked</p>{% endif %}
-      <p class="result"><b>{{ (fn.passed or [])|length }}</b> passed{% if fn.rejected %} · {{ fn.rejected|length }} didn't{% endif %}</p>
-      {% if fn.passed %}<ul class="mini">{% for r in fn.passed %}
-        <li><span class="ok">{{ icon('check', 14) }}</span><b>{{ r.name|nice }}</b><span class="muted">{{ r.spike_x }}× volume · P/E {{ r.pe|round(0)|int if r.pe else '-' }} · ROE {{ r.roe_pct|round(0)|int if r.roe_pct else '-' }}%</span></li>
-      {% endfor %}</ul>{% endif %}
-      {% if fn.rejected %}<details class="more"><summary>{{ icon('chevdown', 16) }}Why {{ fn.rejected|length }} spikes were dropped</summary>
-        <ul class="mini">{% for r in fn.rejected|sort(attribute='spike_x', reverse=True) %}
-          <li><span class="no">{{ icon('x', 14) }}</span><b>{{ (r.name or r.nse_symbol or r.bse_symbol)|nice }}</b><span class="reasons">{% for f in r.fails %}<span class="tag bad">{{ f|fail }}</span>{% endfor %}</span></li>
-        {% endfor %}</ul></details>{% endif %}
-    {% endif %}</div></li>
-{% endif %}
-
-  <li class="step {{ state(3) }}">{{ mark(3, 'council') }}
-    <div><h3>Ask the council</h3>
-    <p class="muted">Each stock gets one fact sheet from official filings and one news search. {{ run.models|length }} AIs read the same facts and vote at the same time.</p>
-    {% if picks %}<ul class="cards">{% for p in picks %}
-      {% set st = p.status %}
-      <li class="card stockcard {{ st }}">
-        <div class="sc-top"><b>{{ (p.name or p.symbol)|nice }}</b>
-          {% if st == 'done' %}{{ verdict(p.verdict) }}{% elif st == 'error' %}<span class="chip sell">{{ icon('alert', 14) }}Failed</span>{% else %}<span class="chip none">{{ icon('spin', 14, 'spin') }}{{ {'queued':'Waiting','facts':'Building fact sheet','news':'Searching news','council':'Voting'}.get(st, st) }}</span>{% endif %}
-        </div>
-        <div class="sc-steps muted small">
-          <span class="{{ 'on' if st in ('news','council','done') }}">{{ icon('file', 13) }}Facts</span>
-          <span class="{{ 'on' if st in ('council','done') }}">{{ icon('news', 13) }}News</span>
-          <span class="{{ 'on' if st == 'done' }}">{{ icon('council', 13) }}Votes</span>
-        </div>
-        {% if st in ('council', 'done') %}<div class="sc-dots">{{ dots(p.opinions, run.models) }}{% if st == 'done' %}<span class="small">{{ agree(p.verdict) }}</span>{% endif %}</div>{% endif %}
-        {% if p.sheet %}
+<div class="{{ 'two' if screen and fn.spikes else '' }}">
+  <div class="col">
+  {% for p in picks %}{% set st = p.status %}
+    <section class="panel">
+      <div class="ph"><h2>{{ (p.name or p.symbol)|nice }} <span class="mono faint" style="font-weight:400;font-size:12px">{{ p.symbol }}</span></h2>
+        <span class="r">{% if st == 'done' %}{{ verdict(p.verdict) }} <span>{{ (p.verdict or {}).avg_score }}</span>{% elif st == 'error' %}<span class="chip sell">Failed</span>{% else %}<span class="chip none">{{ icon('spin', 13, 'spin') }}{{ {'queued':'Waiting','facts':'Fact sheet','news':'News search','council':'Voting'}.get(st, st) }}</span>{% endif %}
+        {% if show_costs() %}{{ cost((p.opinions or [])|selectattr('cost')|sum(attribute='cost') + ((p.news or {}).cost or 0)) if p.opinions else '' }}{% endif %}</span></div>
+      {% if st in ('council', 'done') or p.opinions %}
+      <div class="pb"><div class="slots">
+        {% set ops = p.opinions or [] %}{% if not ops %}{% set ops = [] %}{% for m in run.models %}{% set _ = ops.append({'name': m.name, 'pending': True}) %}{% endfor %}{% endif %}
+        {% for o in ops %}
+          {% if o.pending %}<div class="wait pulse"><span>{{ o.name }}</span><b class="faint">…</b></div>
+          {% elif o.error %}<div class="err"><span>{{ o.name }}</span><b>–</b></div>
+          {% else %}<div class="{{ tone_of(o.verdict) }}" title="{{ o.verdict }}"><span>{{ o.name }}</span><b>{{ o.score }}</b></div>{% endif %}
+        {% endfor %}
+      </div></div>
+      {% else %}
+      <div class="pb muted small">{{ {'queued':'Waiting for its turn.','facts':'Building the fact sheet from filings…','news':'Searching the news…'}.get(st, '') }}{% if st == 'error' %}{{ (p.error or '')[:160] }}{% endif %}</div>
+      {% endif %}
+      <div class="peeks">
+      {% if p.sheet %}
         <details class="peek" id="f-{{ p.isin }}"><summary>{{ icon('file', 14) }}Facts{{ icon('chevdown', 14, 'tw') }}</summary>
           <div class="peek-nums">{% for n in key_numbers(p.sheet) %}<span class="pn {{ n.tone }}"><span>{{ n.label }}</span><b>{{ n.value }}</b></span>{% endfor %}</div>
         </details>{% endif %}
-        {% if p.news %}
+      {% if p.news %}
         <details class="peek" id="n-{{ p.isin }}"><summary>{{ icon('news', 14) }}News{{ icon('chevdown', 14, 'tw') }}</summary>
           <div class="md small">{{ (p.news.text or '')|md|safe }}</div>
         </details>{% endif %}
-        {% set answered = (p.opinions or [])|rejectattr('pending')|list %}
-        {% if answered %}
+      {% set answered = (p.opinions or [])|rejectattr('pending')|list %}
+      {% if answered %}
         <details class="peek" id="a-{{ p.isin }}" {{ 'open' if st == 'council' }}><summary>{{ icon('council', 14) }}Answers · {{ answered|length }} of {{ run.models|length }}{{ icon('chevdown', 14, 'tw') }}</summary>
-          <ul class="answers">{% for o in answered %}
-            <li><span class="dot {{ 'err' if o.error else tone_of(o.verdict) }}">{{ short_name(o.name) }}</span>
+          <div><ul class="answers">{% for o in answered %}
+            <li><span class="vb bg-{{ 'na' if o.error else {'buy':'good','hold':'warn','sell':'bad'}[tone_of(o.verdict)] }}"></span>
               {% if o.error %}<span class="muted">{{ o.name }}: no answer</span>
-              {% else %}<span><b>{{ o.name }}</b> <span class="v {{ tone_of(o.verdict) }}">{{ o.verdict }} {{ o.score }}</span><br><span class="muted">{{ (o.key_risk or (o.lines or [''])[0])[:160] }}</span></span>{% endif %}</li>
-          {% endfor %}</ul>
+              {% else %}<span><b>{{ o.name }}</b> <span class="{{ {'buy':'good','hold':'warn','sell':'bad'}[tone_of(o.verdict)] }}">{{ o.verdict }} {{ o.score }}</span>{% if show_costs() and o.cost is not none %} <span class="cost">{{ o.cost|usd }}</span>{% endif %}<br><span class="muted">{{ (o.key_risk or (o.lines or [''])[0])[:160] }}</span></span>{% endif %}</li>
+          {% endfor %}</ul></div>
         </details>{% endif %}
-        {% if st in ('news', 'council', 'done') %}<a class="open" href="{{ B }}/stock/{{ run.id }}/{{ p.isin }}">{{ 'Open full page' if st == 'done' else 'Open (updates live)' }}{{ icon('chev', 14) }}</a>{% endif %}
-        {% if st == 'error' %}<p class="small muted">{{ (p.error or '')[:140] }}</p>{% endif %}
-      </li>
-    {% endfor %}</ul>
-    {% elif at >= 3 and run.status == 'done' %}<p class="result">No stock to judge.</p>{% endif %}
-    </div></li>
-</ol>
-{% if run.status == 'done' and run.cost_usd %}<p class="muted small center">Finished {{ run.finished[11:16] if run.finished }} UTC · AI cost ${{ '%.2f'|format(run.cost_usd) }}</p>{% endif %}
+      {% if st in ('news', 'council', 'done') %}<a class="peek" style="display:flex;justify-content:space-between;padding:9px 16px;font-size:13.5px;font-weight:600" href="{{ B }}/stock/{{ run.id }}/{{ p.isin }}">{{ 'Open full page' if st == 'done' else 'Open (updates live)' }}{{ icon('chev', 14) }}</a>{% endif %}
+      </div>
+    </section>
+  {% else %}
+    {% if at >= 3 and run.status == 'done' %}<section class="panel"><div class="pb muted">No stock passed every filter.</div></section>
+    {% elif screen %}<section class="panel"><div class="pb muted small">{{ icon('spin', 14, 'spin') if run.status == 'running' }} Stocks appear here once they pass the filters.</div></section>{% endif %}
+  {% endfor %}
+  </div>
+
+  {% if screen and fn.spikes %}
+  <div class="col">
+    <section class="panel">
+      <div class="ph"><h2>{{ icon('filter', 16) }}Why these {{ (fn.passed or [])|length }}</h2><span class="r">of {{ fn.spikes }} volume spikes</span></div>
+      {% set rej = fn.rejected or [] %}
+      <div class="rows">
+      {% for label, n in funnel_steps(run) %}
+        <div class="funrow"><span style="font-size:14px">{{ label }}</span><div class="gauge"><i class="bg-{{ 'good' if loop.last else 'focus' }}" style="width:{{ [n / fn.spikes * 100, 2]|max }}%"></i></div><b>{{ n }}</b></div>
+      {% endfor %}
+      </div>
+      {% if fn.passed %}<ul class="mini">{% for r in fn.passed %}
+        <li><span class="ok">{{ icon('check', 14) }}</span><b>{{ r.name|nice }}</b><span class="muted">{{ r.spike_x }}× · P/E {{ r.pe|round(0)|int if r.pe else '–' }} · ROE {{ r.roe_pct|round(0)|int if r.roe_pct else '–' }}%</span></li>
+      {% endfor %}</ul>{% endif %}
+      {% if rej %}<details class="peek"><summary>{{ icon('x', 14) }}Why {{ rej|length }} spikes were dropped{{ icon('chevdown', 14, 'tw') }}</summary>
+        <ul class="mini" style="margin:0 -16px -12px">{% for r in rej|sort(attribute='spike_x', reverse=True) %}
+          <li><span class="no">{{ icon('x', 14) }}</span><b>{{ (r.name or r.nse_symbol or r.bse_symbol)|nice }}</b><span class="reasons">{% for x in r.fails %}<span class="tag bad">{{ x|fail }}</span>{% endfor %}</span></li>
+        {% endfor %}</ul></details>{% endif %}
+    </section>
+  </div>
+  {% endif %}
+</div>

@@ -12,6 +12,7 @@ from .config import IS_US, MARKET
 DEFAULT_SCHEDULE = {"enabled": True, "time": MARKET["default_time"], "days": [0, 1, 2, 3, 4], "max_stocks": 20}  # Mon=0, market time
 DEFAULT_EMAIL = {"enabled": False, "to": [], "cc": []}
 DEFAULT_WHATSAPP = {"enabled": not IS_US}   # India: Dad's group. US: site only (for now)
+DEFAULT_TELEMETRY = {"show_costs": True}   # show what each AI call cost, on every page
 
 SCHEMA = "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated TEXT)"
 
@@ -32,6 +33,7 @@ def get_settings(conn) -> dict:
         "schedule": {**DEFAULT_SCHEDULE, **(rows.get("schedule") or {})},
         "email": {**DEFAULT_EMAIL, **(rows.get("email") or {})},
         "whatsapp": {**DEFAULT_WHATSAPP, **(rows.get("whatsapp") or {})},
+        "telemetry": {**DEFAULT_TELEMETRY, **(rows.get("telemetry") or {})},
     }
 
 

@@ -1,4 +1,4 @@
-{% from "_ui.html" import icon %}<!doctype html>
+{% from "_ui.html" import icon, flag %}<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
@@ -8,7 +8,7 @@
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#f3f5f8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1724" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -16,26 +16,29 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=16">
+<link rel="stylesheet" href="/static/style.css?v={{ BUILD }}">
+<meta name="build" content="{{ BUILD }}">
 {% block head %}{% endblock %}
 </head><body>
 <header class="top">
-  <a class="brand" href="{{ B }}/"><img src="/icon.svg" alt="" width="28" height="28">Stock Council</a>
+  <a class="brand" href="{{ B }}/"><img src="/icon.svg" alt="" width="26" height="26"><span class="name">Stock Council</span></a>
   <nav class="mkt" aria-label="Market">
-    <a href="/" class="{{ 'on' if not IS_US }}"><span>🇮🇳</span>India</a>
-    <a href="/us/" class="{{ 'on' if IS_US }}"><span>🇺🇸</span>US</a>
+    <a href="/" class="{{ 'on' if not IS_US }}">{{ flag('in') }}India</a>
+    <a href="/us/" class="{{ 'on' if IS_US }}">{{ flag('us') }}US</a>
   </nav>
   <nav class="tabs" aria-label="Main">
     <a href="{{ B }}/" class="{{ 'on' if nav == 'today' }}">{{ icon('today', 20) }}<span>Today</span></a>
     <a href="{{ B }}/screener" class="{{ 'on' if nav == 'screener' }}">{{ icon('filter', 20) }}<span>Screener</span></a>
-    <a href="{{ B }}/how" class="{{ 'on' if nav == 'how' }}">{{ icon('how', 20) }}<span>How it works</span></a>
+    <a href="{{ B }}/how" class="{{ 'on' if nav == 'how' }}">{{ icon('how', 20) }}<span class="long">How it works</span><span class="short">How</span></a>
     <a href="{{ B }}/history" class="{{ 'on' if nav == 'history' }}">{{ icon('history', 20) }}<span>History</span></a>
     <a href="{{ B }}/settings" class="{{ 'on' if nav == 'settings' }}">{{ icon('settings', 20) }}<span>Settings</span></a>
   </nav>
 </header>
 <main>{% block main %}{% endblock %}</main>
-<footer class="foot">{{ M.flag }} {{ M.name }} · facts from {{ "SEC filings and market data" if IS_US else "NSE &amp; BSE filings" }} · opinions from AI models · not investment advice</footer>
+<footer class="foot">{{ flag('us' if IS_US else 'in') }} {{ M.name }} · facts from {{ "SEC filings and market data" if IS_US else "NSE and BSE filings" }} · opinions from AI models · not investment advice</footer>
 <script>window.B = "{{ B }}";</script>
-<script src="/static/ui.js?v=1"></script>
+<div class="upd" id="upd" role="status" hidden>{{ icon('download', 16) }}<span>New version ready</span><button type="button" class="go" id="upd-go">Reload</button><button type="button" class="x" id="upd-x" aria-label="Later">{{ icon('x', 15) }}</button></div>
+<script src="/static/ui.js?v={{ BUILD }}"></script>
+<script src="/static/update.js?v={{ BUILD }}"></script>
 {% block scripts %}{% endblock %}
 </body></html>

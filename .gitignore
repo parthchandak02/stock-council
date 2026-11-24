@@ -10,3 +10,6 @@ data/
 __pycache__/
 .venv/
 .pytest_cache/
+cook/refs/
+cook/stills/
+cook/compare/

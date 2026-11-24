@@ -39,7 +39,60 @@ tpl.env.filters["fail"] = short_fail
 tpl.env.filters["num"] = lambda x: "-" if x is None else f"{x:,}"
 tpl.env.filters["day"] = lambda s: date.fromisoformat(s[:10]).strftime("%a %-d %b") if s else ""
 B = MARKET["base"]
-tpl.env.globals.update(B=B, M=MARKET, IS_US=IS_US)
+
+
+def _build_id() -> str:
+    """Changes with every deploy (git pull + restart): the commit, else the newest template/static file."""
+    import subprocess
+    try:
+        return subprocess.run(["git", "-C", str(HERE), "rev-parse", "--short", "HEAD"], capture_output=True,
+                              text=True, timeout=5).stdout.strip() or "dev"
+    except Exception:
+        files = list((HERE / "templates").iterdir()) + list(STATIC.iterdir())
+        return str(int(max(f.stat().st_mtime for f in files)))
+
+
+BUILD = _build_id()
+
+
+def show_costs() -> bool:
+    try:
+        return bool(get_settings(db())["telemetry"].get("show_costs"))
+    except Exception:
+        return False
+
+
+def usd(x) -> str:
+    if x is None:
+        return "–"
+    return f"${x:.2f}" if x >= 0.995 else f"${x:.3f}" if x >= 0.0095 else f"${x:.4f}"
+
+
+def funnel_steps(run: dict) -> list[tuple[str, int]]:
+    """How many volume spikes are left after each rule, in order (a stock drops out at its first failed rule)."""
+    fn, f = run.get("funnel") or {}, run.get("filters") or {}
+    C, U = MARKET["cur"], MARKET["unit_label"]
+    rules = [("market cap", f"Market cap over {C}{f.get('min_market_cap_cr', 0):,.0f} {U}"),
+             ("P/E", f"P/E under {f.get('max_pe', 0):g}"), ("ROE", f"ROE over {f.get('min_roe_pct', 0):g}%"),
+             ("D/E", f"Debt / equity under {f.get('max_debt_to_equity', 0):g}")]
+    first = [0] * len(rules)
+    for r in fn.get("rejected") or []:
+        fails = r.get("fails") or []
+        i = next((i for i, (k, _) in enumerate(rules) for x in fails
+                  if x.startswith(k) or (k == "P/E" and "loss" in x)), 0)
+        first[i] += 1
+    left = fn.get("spikes") or 0
+    out = [(f"Volume over {f.get('volume_spike_multiple', 6):g}× usual", left)]
+    for (k, label), n in zip(rules, first):
+        left -= n
+        out.append((label, max(left, 0)))
+    if fn.get("passed") is not None and out:
+        out[-1] = (out[-1][0], len(fn["passed"]))
+    return out
+
+
+tpl.env.globals.update(B=B, M=MARKET, IS_US=IS_US, BUILD=BUILD, show_costs=show_costs, funnel_steps=funnel_steps)
+tpl.env.filters["usd"] = usd
 tpl.env.globals.update(group=lambda v: VOTE_GROUP.get(str(v or "").lower(), ""), short_name=short_name,
                        key_numbers=key_numbers,
                        FILTER_LABELS=FILTER_LABELS)
@@ -163,7 +216,24 @@ def home(request: Request):
         "WHERE r.kind='on_demand' ORDER BY r.id DESC LIMIT 6")]
     return tpl.TemplateResponse(request, "home.html", {
         "run": run, "picks": _picks(conn, run["id"]) if run else [], "running": _running(conn),
-        "checks": checks, "nav": "today"})
+        "checks": checks, "nav": "today", "track": _track_buys(conn), "avg_stock": _avg_stock()})
+
+
+def _track_buys(conn) -> dict | None:
+    try:
+        from ..track import calls, summary
+        b = next((c for c in summary(calls(conn))["by_call"] if c["call"] == "BUY"), None)
+        return b and {"n": b["n"], "up": b["up"], "avg": b["avg"]}
+    except Exception:
+        return None
+
+
+def _avg_stock() -> float | None:
+    try:
+        from ..telemetry import summary as spend
+        return spend(30)["per_stock"]
+    except Exception:
+        return None
 
 
 @app.get("/run/{run_id}", response_class=HTMLResponse)
@@ -175,7 +245,7 @@ def run_page(request: Request, run_id: int):
     picks = _picks(conn, run_id, sort=False)
     if run["kind"] == "on_demand" and run["status"] == "done" and picks:
         return RedirectResponse(B + f"/stock/{run_id}/{picks[0]['isin']}", status_code=303)
-    return tpl.TemplateResponse(request, "run.html", {"run": run, "picks": picks, "nav": "today"})
+    return tpl.TemplateResponse(request, "run.html", {"run": run, "picks": picks, "nav": "today", "calls": _calls(run_id)})
 
 
 @app.get("/run/{run_id}/live", response_class=HTMLResponse)
@@ -201,8 +271,16 @@ def stock(request: Request, run_id: int, isin: str):
         return RedirectResponse(B + f"/run/{run_id}", status_code=303)
     return tpl.TemplateResponse(request, "stock.html", {
         "run": run, "p": p, "nums": key_numbers(p.get("sheet") or {}), "why": why(p), "nav": "today",
-        "chart": price_chart(conn, isin, run["day"]), "peers": peers(conn, isin),
+        "chart": price_chart(conn, isin, run["day"]), "peers": peers(conn, isin), "calls": _calls(run_id, isin),
         "broker": _broker(conn), "orders": _orders(isin)})
+
+
+def _calls(run_id: int, isin: str | None = None) -> list[dict]:
+    try:
+        from ..telemetry import calls_for
+        return calls_for(run_id, isin)
+    except Exception:
+        return []
 
 
 def _broker(conn) -> dict:
@@ -260,7 +338,7 @@ def how(request: Request):
     conn = db()
     st = get_settings(conn)
     run = _latest_screen(conn)
-    return tpl.TemplateResponse(request, "how.html", {"st": st, "run": run, "nav": "how"})
+    return tpl.TemplateResponse(request, "how.html", {"st": st, "run": run, "nav": "how", "avg_stock": _avg_stock()})
 
 
 @app.get("/history", response_class=HTMLResponse)
@@ -291,8 +369,15 @@ def settings_page(request: Request, saved: str = "", sent: str = ""):
     except Exception:
         status = None
     times = [f"{h:02d}:{m:02d}" for h in range(17, 24) for m in (0, 15, 30, 45)]
+    from ..telemetry import backfill_from_picks, openrouter_key, summary as spend_summary
+    backfill_from_picks()
+    spend = spend_summary(30)
+    names = {m["model"]: m["name"] for m in st["models"]}
+    for r in spend["by_model"]:
+        r["name"] = names.get(r["model"], "News search" if r["model"].startswith("deepseek") and r["model"] not in names else r["model"].split("/")[-1])
     return tpl.TemplateResponse(request, "settings.html", {
         "st": st, "models_text": models_text, "saved": saved, "sent": sent, "nav": "settings",
+        "spend": spend, "key": openrouter_key(),
         "addr_status": status, "times": times,
         "daynames": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]})
 
@@ -329,6 +414,7 @@ async def save_settings(request: Request):
         to, cc = split(form.get("email_to")), split(form.get("email_cc"))
         save_setting(conn, "email", {"enabled": form.get("email_on") == "1", "to": to, "cc": cc})
         save_setting(conn, "whatsapp", {"enabled": form.get("wa_on") == "1"})
+        save_setting(conn, "telemetry", {"show_costs": form.get("costs_on") == "1"})
         try:
             from ..mailer import ensure_addresses
             sent = ensure_addresses(to + cc)   # Cloudflare emails each new address a verify link
@@ -387,7 +473,7 @@ def screener(request: Request):
     cols = DEFAULT_COLS + [k for k in dict.fromkeys(extra) if k not in DEFAULT_COLS]
     for s in saved:
         s["last"] = saved_screen_history(conn, s["id"])
-    return tpl.TemplateResponse(request, "screener.html", {
+    return tpl.TemplateResponse(request, "screener.html", { "avg_stock": _avg_stock(),
         "rules": rules, "res": res, "cols": cols, "metrics": METRICS, "presets": PRESETS,
         "saved": saved, "active": active, "nav": "screener"})
 
@@ -443,7 +529,8 @@ def track_page(request: Request):
 
 
 def price_chart(conn, isin: str, mark_day: str | None = None) -> dict | None:
-    """One year of adjusted closes as an SVG path, with high-volume days marked."""
+    """One year of split-adjusted closes, drawn in a 760×210 box: price axis on the right, volume underneath."""
+    import math
     import pandas as pd
     from ..actions import adjust, aliases
     ids = aliases(conn, isin)
@@ -454,19 +541,40 @@ def price_chart(conn, isin: str, mark_day: str | None = None) -> dict | None:
     if len(df) < 20:
         return None
     df = adjust(df, conn, price_cols=("close",), volume_cols=("vol",))
-    W, H = 600.0, 150.0
-    lo, hi = df["close"].min(), df["close"].max()
-    span = (hi - lo) or 1
-    xs = [i * W / (len(df) - 1) for i in range(len(df))]
-    ys = [H - 8 - (c - lo) / span * (H - 16) for c in df["close"]]
-    path = "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
+    W, H, L, R, T, VOL = 760.0, 210.0, 4.0, 58.0, 10.0, 22.0
+    plot_b = H - VOL - 24                       # bottom of the price area
+    lo, hi = float(df["close"].min()), float(df["close"].max())
+    raw = (hi - lo) / 3 or max(hi, 1) / 10
+    mag = 10 ** math.floor(math.log10(raw))
+    step = next(m * mag for m in (1, 2, 2.5, 5, 10) if m * mag >= raw)
+    a, b = math.floor(lo / step) * step, math.ceil(hi / step) * step
+    y = lambda v: T + (plot_b - T) * (1 - (v - a) / ((b - a) or 1))
+    n = len(df)
+    x = lambda i: L + i * (W - L - R) / (n - 1)
+    xs = [x(i) for i in range(n)]
+    ys = [y(c) for c in df["close"]]
+    path = "M" + " L".join(f"{p:.1f},{q:.1f}" for p, q in zip(xs, ys))
     vmax = df["vol"].max() or 1
-    bars = [(x, 30 * v / vmax) for x, v in zip(xs, df["vol"])]
-    spikes = [(x, y) for x, y, v in zip(xs, ys, df["vol"]) if v > 4 * df["vol"].median()]
-    mark = next(((x, y) for x, y, d in zip(xs, ys, df["date"]) if d == mark_day), None)
-    return {"path": path, "area": path + f" L{W},{H} L0,{H} Z", "bars": bars, "spikes": spikes[-12:], "mark": mark,
-            "lo": round(lo, 2), "hi": round(hi, 2), "first": df["date"].iloc[0], "last": df["date"].iloc[-1],
-            "up": df["close"].iloc[-1] >= df["close"].iloc[0], "W": W, "H": H}
+    med = df["vol"].median()
+    bars = [(p, VOL * v / vmax, v > 4 * med) for p, v in zip(xs, df["vol"])]
+    ticks = []
+    v = a
+    while v <= b + step / 2:
+        ticks.append((round(y(v), 1), f"{v:,.0f}" if step >= 1 else f"{v:,.2f}"))
+        v += step
+    months, seen = [], set()
+    for i, d in enumerate(df["date"]):
+        key = d[:7]
+        if key not in seen and d[8:10] <= "07":
+            seen.add(key)
+            months.append((round(xs[i], 1), date.fromisoformat(d).strftime("%b")))
+    months = months[::2] if len(months) > 7 else months
+    mark = next(((p, q) for p, q, d in zip(xs, ys, df["date"]) if d == mark_day), None)
+    last = float(df["close"].iloc[-1])
+    return {"path": path, "area": path + f" L{xs[-1]:.1f},{plot_b:.1f} L{L},{plot_b:.1f} Z", "bars": bars, "mark": mark,
+            "ticks": ticks, "months": months, "lo": round(lo, 2), "hi": round(hi, 2), "last": last,
+            "last_y": round(ys[-1], 1), "last_x": round(xs[-1], 1), "plot_b": plot_b, "vol_b": H - 20,
+            "up": last >= df["close"].iloc[0], "W": W, "H": H, "L": L, "R": R, "T": T}
 
 
 def peers(conn, isin: str, n: int = 6) -> list[dict]:
@@ -519,6 +627,12 @@ def holdings_api(symbol: str, bse: str = ""):
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+@app.get("/version")
+def version():
+    """The page polls this; a new value means a deploy happened and the page offers a reload."""
+    return JSONResponse({"build": BUILD}, headers={"cache-control": "no-store"})
 
 
 # Last, so it never shadows a page route.

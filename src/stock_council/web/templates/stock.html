@@ -1,136 +1,177 @@
-{% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, agree, change, tone_of %}
+{% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, ring, gauge, agree, change, tone_of, cost %}
 {% block title %}{{ p.name|nice }} · Stock Council{% endblock %}
 {% block main %}
-<div id="live" {% if p.status in ('news', 'council') %}data-poll="1"{% endif %}>{% set s = p.sheet or {} %}{% set t = s.technicals or {} %}{% set v = p.verdict or {} %}
+<div id="live" {% if p.status in ('news', 'council') %}data-poll="1"{% endif %} style="display:flex;flex-direction:column;gap:inherit">{% set s = p.sheet or {} %}{% set t = s.technicals or {} %}{% set v = p.verdict or {} %}{% set f = s.fundamentals or {} %}
 <a class="back" href="{{ B }}/">{{ icon('back', 16) }}Today</a>
 
-<section class="hero card">
-  <div class="hero-id">
-    <p class="eyebrow">{{ p.symbol }}{% if s.bse_code %} · BSE {{ s.bse_code }}{% endif %} · {{ run.day|day }}</p>
-    <h1>{{ (p.name or p.symbol)|nice }}</h1>
-    <p class="price">{{ p.price|inr }} {{ change(s.change_pct) }}</p>
+{% set k = {"BUY": "buy", "SELL": "sell", "HOLD": "hold", "NO CONSENSUS": "split"}.get(v.call, "split") %}
+{% set word = {"BUY": "Buy", "SELL": "Sell", "HOLD": "Hold", "NO CONSENSUS": "Split"}.get(v.call, "–") %}
+<section class="panel">
+  <div class="hdr">
+    <div>
+      <h1>{{ (p.name or p.symbol)|nice }}</h1>
+      <div class="meta"><span>{{ M.id_label }}: {{ p.symbol }}</span>{% if s.bse_code %}<span>BSE {{ s.bse_code }}</span>{% endif %}{% if f.sector %}<span>{{ f.sector }}</span>{% endif %}{% if f.market_cap_cr %}<span>{{ M.cur }}{{ '{:,.0f}'.format(f.market_cap_cr) }} {{ M.unit_label }}</span>{% endif %}<span>{{ run.day|day }}</span></div>
+      <div class="price"><b>{{ p.price|inr }}</b>{{ change(s.change_pct) }}</div>
+    </div>
+    <div class="verdict {{ k }}">
+      {% if p.status in ('news', 'council') %}
+        {{ ring(p.opinions or [], v) }}<div><strong class="muted">{{ icon('spin', 15, 'spin') }} {{ 'Searching news' if p.status == 'news' else 'Voting' }}</strong><span>answers appear as they arrive</span></div>
+      {% else %}
+        {{ ring(p.opinions, v) }}<div><strong>{{ v.flavour if v.call in ('BUY', 'SELL') and v.flavour else word }}</strong>
+        <span>{% if v.votes %}{{ v.votes.BUY or 0 }} buy · {{ v.votes.HOLD or 0 }} hold · {{ v.votes.SELL or 0 }} sell{% endif %}{% if v.avg_score %} · avg {{ v.avg_score }}{% endif %}</span>
+        {% if v.min_score is not none and v.max_score is not none %}<span class="faint" style="display:block;font-size:12px">scores {{ v.min_score }} to {{ v.max_score }}</span>{% endif %}</div>
+      {% endif %}
+    </div>
   </div>
-  <div class="hero-vote">
-    {% if p.status in ('news', 'council') %}<span class="chip none big">{{ icon('spin', 15, 'spin') }}{{ 'Searching news' if p.status == 'news' else 'Voting' }}</span>{% else %}{{ verdict(v, 'big') }}{% endif %}
-    <p>{{ agree(v) }}</p>
-    {{ dots(p.opinions, run.models if p.status in ('news','council') else None, big=True) }}
+  <div class="grid c3 stats">
+    <div><div class="lab"><span>Volume vs usual</span></div><div class="val">{{ s.spike_x or '–' }}<small>×</small></div></div>
+    {% if IS_US %}<div><div class="lab"><span>Short interest</span></div><div class="val">{{ ((s.owners_us or {}).short_pct_float or 0)|round(1) }}<small>% of float</small></div></div>
+    {% else %}<div><div class="lab"><span>Delivered today</span></div><div class="val">{{ t.delivery_pct_today|round(0)|int if t.delivery_pct_today is not none else '–' }}<small>%{% if t.delivery_pct_30d_avg %} vs {{ t.delivery_pct_30d_avg|round(0)|int }}{% endif %}</small></div></div>{% endif %}
+    <div><div class="lab"><span>Stop-loss zone</span></div><div class="val">{% if v.stop_losses %}{{ M.cur }}{{ '{:,.0f}'.format(v.stop_losses[0]) }}{% if v.stop_losses|length > 1 %}<small>to {{ '{:,.0f}'.format(v.stop_losses[-1]) }}</small>{% endif %}{% else %}–{% endif %}</div></div>
   </div>
-  <dl class="facts3">
-    <div><dt>Volume vs usual</dt><dd>{{ s.spike_x or '-' }}×</dd></div>
-    {% if IS_US %}<div><dt>Short interest</dt><dd>{{ ((s.owners_us or {}).short_pct_float or 0)|round(1) }}%</dd></div>
-    {% else %}<div><dt>Delivered</dt><dd>{{ t.delivery_pct_today|round(0)|int if t.delivery_pct_today is not none else '-' }}%</dd></div>{% endif %}
-    <div><dt>Stop-loss</dt><dd>{% if v.stop_losses %}{{ M.cur }}{{ v.stop_losses[0]|round(0)|int }}–{{ v.stop_losses[-1]|round(0)|int }}{% else %}-{% endif %}</dd></div>
-  </dl>
   {% if why.risk or why.trigger %}
   <div class="why">
-    {% if why.risk %}<p>{{ icon('alert', 16) }}<span><b>Main risk.</b> {{ why.risk }}</span></p>{% endif %}
-    {% if why.trigger %}<p>{{ icon('target', 16) }}<span><b>Would change view if:</b> {{ why.trigger }}</span></p>{% endif %}
+    {% if why.risk %}<p class="risk">{{ icon('alert', 16) }}<span><b>Main risk.</b> {{ why.risk }}</span></p>{% endif %}
+    {% if why.trigger %}<p>{{ icon('target', 16) }}<span><b>Changes view if</b> {{ why.trigger }}</span></p>{% endif %}
   </div>{% endif %}
 </section>
-
-{% if p.status == 'done' and not IS_US %}
-<section class="order card" id="order"
-  data-name="{{ (p.name or p.symbol)|nice }}" data-symbol="{{ p.symbol }}" data-isin="{{ p.isin }}" data-run="{{ run.id }}"
-  data-to="{{ broker.to }}" data-gmail="{{ broker.gmail }}">
-  <h2 class="sub">{{ icon('mail', 18) }}Send an order to the broker</h2>
-  {% if not broker.to or not broker.accounts %}
-  <p class="muted small">Add the broker's email addresses and your account codes in <a href="{{ B }}/settings#broker">Settings</a> first.</p>
-  {% else %}
-  <div class="side" role="radiogroup" aria-label="Buy or sell">
-    <label><input type="radio" name="side" value="buy" checked><span class="buy">{{ icon('up', 15) }}GTT Buy</span></label>
-    <label><input type="radio" name="side" value="sell"><span class="sell">{{ icon('down', 15) }}GTT Sell</span></label>
-  </div>
-  <label class="acct">Account
-    <select name="account">{% for a in broker.accounts %}<option>{{ a }}</option>{% endfor %}</select>
-  </label>
-  <div class="lines">
-    <div class="lh muted small"><span>Quantity</span><span>Trigger price {{ M.cur }}</span><span></span></div>
-    <div class="ol" id="lines"></div>
-    <button type="button" class="btn ghost addline">{{ icon('plus', 15) }}Add a line</button>
-  </div>
-  <div class="preview card">
-    <p class="muted small">Email preview</p>
-    <p class="pv-to small"><b>To</b> {{ broker.to }}</p>
-    <p class="pv-subject"><b>Subject</b> <span id="pv-subject"></span></p>
-    <pre id="pv-body"></pre>
-  </div>
-  <button type="button" class="btn go" id="opengmail" disabled>{{ icon('link', 16) }}Open in Gmail to review &amp; send</button>
-  <p class="muted small">Opens a ready Gmail draft. Nothing is sent until you press Send there.</p>
-  {% endif %}
-  {% if orders %}
-  <details class="peek" id="orders-{{ p.isin }}"><summary>{{ icon('history', 14) }}Orders prepared for this stock · {{ orders|length }}{{ icon('chevdown', 14, 'tw') }}</summary>
-    <ul class="olog">{% for o in orders %}<li><span class="chip {{ o.side }}">{{ 'Buy' if o.side == 'buy' else 'Sell' }}</span> {{ o.account }} · {{ o.created|day }} · {% for l in o.lines %}{{ l.qty }}×{{ M.cur }}{{ '%g'|format(l.price) }}{{ ', ' if not loop.last }}{% endfor %}</li>{% endfor %}</ul>
-  </details>{% endif %}
-</section>
-{% endif %}
 {% if p.error %}<div class="note bad">{{ icon('alert', 16) }}<span>{{ p.error[:300] }}</span></div>{% endif %}
 
+<div class="two">
+  <div class="col">
+    {% if chart %}
+    <section class="panel pricechart">
+      <div class="ph"><h2>{{ icon('chart', 16) }}Price</h2><span class="r">1 year · split-adjusted</span></div>
+      <div class="pb">
+        <svg viewBox="0 0 {{ chart.W }} {{ chart.H }}" role="img" aria-label="One-year price chart, low {{ chart.lo }}, high {{ chart.hi }}">
+          <defs><linearGradient id="pg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--price)" stop-opacity=".22"/><stop offset="1" stop-color="var(--price)" stop-opacity="0"/></linearGradient></defs>
+          {% for yy, lbl in chart.ticks %}<line x1="{{ chart.L }}" x2="{{ chart.W - chart.R }}" y1="{{ yy }}" y2="{{ yy }}" stroke="var(--line)"/><text x="{{ chart.W - chart.R + 6 }}" y="{{ yy + 3.5 }}">{{ lbl }}</text>{% endfor %}
+          {% for xx, m in chart.months %}<text x="{{ xx }}" y="{{ chart.H - 4 }}" text-anchor="middle">{{ m }}</text>{% endfor %}
+          <path d="{{ chart.area }}" fill="url(#pg)"/>
+          <path d="{{ chart.path }}" fill="none" stroke="var(--price)" stroke-width="1.6" stroke-linejoin="round"/>
+          {% for xx, h, big in chart.bars %}<rect x="{{ '%.1f'|format(xx - 1) }}" y="{{ '%.1f'|format(chart.vol_b - h) }}" width="2" height="{{ '%.1f'|format(h) }}" fill="var(--{{ 'hold' if big else 'line2' }})"/>{% endfor %}
+          {% if chart.mark %}<line x1="{{ '%.1f'|format(chart.mark[0]) }}" x2="{{ '%.1f'|format(chart.mark[0]) }}" y1="{{ chart.T }}" y2="{{ chart.vol_b }}" stroke="var(--ink)" stroke-dasharray="3 3" opacity=".5"/>{% endif %}
+          <circle cx="{{ chart.last_x }}" cy="{{ chart.last_y }}" r="3.2" fill="var(--price)"/>
+          <rect x="{{ chart.W - chart.R + 2 }}" y="{{ chart.last_y - 9 }}" width="{{ chart.R - 2 }}" height="18" rx="3" fill="var(--price)"/>
+          <text x="{{ chart.W - chart.R + 6 }}" y="{{ chart.last_y + 4 }}" style="fill:var(--on-accent);font-weight:600">{{ '{:,.0f}'.format(chart.last) if chart.last >= 100 else '%.2f'|format(chart.last) }}</text>
+        </svg>
+        <div class="legend-row"><span><i class="sw bg-warn"></i>volume over 4× normal</span>{% if chart.mark %}<span><i class="sw" style="width:2px;height:12px;background:var(--ink)"></i>day of this call</span>{% endif %}<span class="mono">low {{ M.cur }}{{ chart.lo }} · high {{ M.cur }}{{ chart.hi }}</span></div>
+      </div>
+    </section>
+    {% endif %}
 
-{% if chart %}
-<div class="chart card" aria-label="One-year price chart">
-  <div class="chart-top"><span class="muted small">1 year · adjusted for splits</span><span class="small"><span class="muted">low</span> {{ M.cur }}{{ chart.lo }} <span class="muted">· high</span> {{ M.cur }}{{ chart.hi }}</span></div>
-  <svg viewBox="0 -2 {{ chart.W }} {{ chart.H + 34 }}" preserveAspectRatio="none" role="img">
-    <path d="{{ chart.area }}" class="area {{ 'up' if chart.up else 'down' }}"/>
-    <path d="{{ chart.path }}" class="line {{ 'up' if chart.up else 'down' }}" vector-effect="non-scaling-stroke"/>
-    {% for x, h in chart.bars %}<rect x="{{ '%.1f'|format(x) }}" y="{{ '%.1f'|format(chart.H + 32 - h) }}" width="1.6" height="{{ '%.1f'|format(h) }}" class="vbar"/>{% endfor %}
-    {% for x, y in chart.spikes %}<circle cx="{{ '%.1f'|format(x) }}" cy="{{ '%.1f'|format(y) }}" r="3.5" class="spk"/>{% endfor %}
-    {% if chart.mark %}<line x1="{{ '%.1f'|format(chart.mark[0]) }}" x2="{{ '%.1f'|format(chart.mark[0]) }}" y1="0" y2="{{ chart.H + 32 }}" class="mk"/>{% endif %}
-  </svg>
-  <p class="muted small chart-legend"><i class="spk-dot"></i> volume over 4× normal{% if chart.mark %} · <i class="mk-dot"></i> day of this call{% endif %}</p>
-</div>
-{% endif %}
-{% if not IS_US and p.status == 'done' %}
-<section class="holdings card" id="holdings" data-symbol="{{ p.symbol }}" data-bse="{{ s.bse_code or '' }}">
-  <div class="hd-top">
-    <h2 class="sub">{{ icon('council', 18) }}Who owns it <span class="muted small">quarterly filings</span></h2>
-    <div class="seg" role="tablist"><button type="button" data-view="chart" class="on">Graph</button><button type="button" data-view="table">Table</button></div>
+    {% if not IS_US and p.status == 'done' %}
+    <section class="panel holdings" id="holdings" data-symbol="{{ p.symbol }}" data-bse="{{ s.bse_code or '' }}">
+      <div class="ph hd-top"><h2>{{ icon('council', 16) }}Who owns it</h2>
+        <div class="seg" role="tablist"><button type="button" data-view="chart" class="on">Graph</button><button type="button" data-view="table">Table</button></div></div>
+      <div class="hd-body"><p class="muted small">{{ icon('spin', 14, 'spin') }} Reading 12 quarters of shareholding filings…</p></div>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <div class="ph"><h2>{{ icon('shield', 16) }}The numbers</h2><span class="r">from filings · tick = limit</span></div>
+      <div class="grid">
+      {% for n in nums %}
+        <div><div class="lab"><span>{{ n.label }}</span>{% if n.tone in ('good','warn','bad') %}<span class="chip {{ n.tone }}">{{ {'good':'OK','warn':'Watch','bad':'Risk'}[n.tone] }}</span>{% endif %}</div>
+          <div class="val {{ 'word' if not n.num[:1].isdigit() and n.num[:1] not in '-₹$' }}">{{ n.num }}{% if n.unit %}<small>{{ n.unit }}</small>{% endif %}</div>
+          {% if n.gauge %}{{ gauge(n.gauge.pct, n.tone if n.tone in ('good','warn','bad') else 'na', n.gauge.lim, n.gauge.l, n.gauge.r, n.gauge.band) }}{% else %}<div class="hint">{{ n.hint }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      </div>
+    </section>
   </div>
-  <div class="hd-body"><p class="muted small loading">{{ icon('spin', 14, 'spin') }} Reading 12 quarters of shareholding filings…</p></div>
-</section>
-{% endif %}
-<h2 class="sub">{{ icon('shield', 18) }}The numbers <span class="muted small">from filings, not AI</span></h2>
-<div class="nums">
-{% for n in nums %}
-  <div class="num {{ n.tone }}"><span class="lbl">{{ n.label }}</span><b>{{ n.value }}</b><span class="hint">{{ n.hint }}</span></div>
-{% endfor %}
-</div>
 
-<h2 class="sub">{{ icon('council', 18) }}What each AI said{% if p.status == 'council' %} <span class="muted small">answers appear as they arrive</span>{% endif %}</h2>
-<div class="ais">
-{% for o in (p.opinions or [])|rejectattr('pending') %}
-<details class="ai" id="ai-{{ loop.index }}">
-  <summary>
-    <span class="dot {{ 'err' if o.error else tone_of(o.verdict) }}">{{ short_name(o.name) }}</span>
-    <b>{{ o.name }}</b>
-    {% if o.error %}<span class="muted">no answer</span>{% else %}
-    <span class="v {{ tone_of(o.verdict) }}">{{ o.verdict }}</span><span class="sc">{{ o.score }}</span>{% endif %}
-    {{ icon('chevdown', 16, 'tw') }}
-  </summary>
-  {% if not o.error %}
-  <div class="ai-body">
-    {% if o.stop_loss or o.entry_zone %}<p class="muted small">{% if o.entry_zone %}Entry {{ o.entry_zone }}{% endif %}{% if o.stop_loss %}{{ ' · ' if o.entry_zone }}Stop {{ M.cur }}{{ o.stop_loss }}{% endif %}</p>{% endif %}
-    <ol>{% for l in o.lines %}<li>{{ l }}</li>{% endfor %}</ol>
-  </div>{% endif %}
-</details>
-{% endfor %}
-</div>
+  <div class="col">
+    <section class="panel">
+      <div class="ph"><h2>{{ icon('council', 16) }}What each AI said</h2><span class="r">{% if show_costs() and p.opinions %}{{ cost(((p.opinions or [])|selectattr('cost')|sum(attribute='cost')) + ((p.news or {}).cost or 0), 'this check ') }}{% else %}tap to read{% endif %}</span></div>
+      <div>
+      {% for o in (p.opinions or []) %}
+      {% if o.pending %}
+        <div class="rows"><div class="member"><b style="font-weight:500;font-size:14px">{{ o.name }}</b><span class="muted pulse" style="font-size:13px">thinking…</span><span></span><em></em><span></span></div></div>
+      {% else %}
+      <details class="ai" id="ai-{{ loop.index }}">
+        <summary class="member" style="display:grid">
+          <b style="font-weight:500;font-size:14px">{{ o.name }}</b>
+          {% if o.error %}<span class="muted v">no answer</span><span></span><em>–</em>{% else %}
+          <span class="v {{ {'buy':'good','hold':'warn','sell':'bad'}[tone_of(o.verdict)] }}">{{ o.verdict }}</span>
+          <span class="bar"><i class="bg-{{ {'buy':'good','hold':'warn','sell':'bad'}[tone_of(o.verdict)] }}" style="width:{{ (o.score or 0) * 10 }}%"></i></span>
+          <em>{{ o.score }}</em>{% endif %}
+          {{ icon('chevdown', 14, 'tw') }}
+        </summary>
+        {% if not o.error %}
+        <div class="ai-body">
+          {% if o.stop_loss or o.entry_zone or show_costs() %}<p class="muted">{% if o.entry_zone %}Entry {{ o.entry_zone }}{% endif %}{% if o.stop_loss %}{{ ' · ' if o.entry_zone }}Stop {{ M.cur }}{{ o.stop_loss }}{% endif %}{% if show_costs() and o.cost is not none %}{{ ' · ' if o.entry_zone or o.stop_loss }}{{ o.cost|usd }}{% if o.tokens %} · {{ '{:,}'.format(o.tokens[0] or 0) }} in / {{ '{:,}'.format(o.tokens[1] or 0) }} out tokens{% endif %} · {{ o.seconds }}s{% endif %}</p>{% endif %}
+          <ol>{% for l in o.lines %}<li>{{ l }}</li>{% endfor %}</ol>
+        </div>{% else %}<div class="ai-body muted">{{ (o.error or '')[:200] }}</div>{% endif %}
+      </details>
+      {% endif %}
+      {% endfor %}
+      </div>
+      {% if show_costs() and calls %}
+      <details class="peek"><summary>{{ icon('wallet', 14) }}Every AI call for this stock · {{ calls|length }}{{ icon('chevdown', 14, 'tw') }}</summary>
+        <div class="tblwrap" style="padding:0"><table class="tbl"><tr><th>Call</th><th>Tokens in</th><th>Out</th><th>Seconds</th><th>Cost</th></tr>
+        {% for c in calls %}<tr><td>{{ c.purpose or c.model }}{% if not c.ok %} <span class="chip bad">failed</span>{% endif %}</td><td>{{ '{:,}'.format(c.prompt_tokens) if c.prompt_tokens else '–' }}</td><td>{{ '{:,}'.format(c.completion_tokens) if c.completion_tokens else '–' }}</td><td>{{ c.seconds or '–' }}</td><td>{{ c.cost|usd }}</td></tr>{% endfor %}
+        <tr class="hl"><td>Total</td><td></td><td></td><td></td><td>{{ (calls|selectattr('cost')|sum(attribute='cost'))|usd }}</td></tr></table></div>
+      </details>{% endif %}
+    </section>
 
+    {% if p.status == 'done' and not IS_US %}
+    <section class="panel order" id="order"
+      data-name="{{ (p.name or p.symbol)|nice }}" data-symbol="{{ p.symbol }}" data-isin="{{ p.isin }}" data-run="{{ run.id }}"
+      data-to="{{ broker.to }}" data-gmail="{{ broker.gmail }}">
+      <div class="ph"><h2>{{ icon('mail', 16) }}Order to broker</h2>
+        {% if broker.to and broker.accounts %}<div class="side" role="radiogroup" aria-label="Buy or sell">
+          <label><input type="radio" name="side" value="buy" checked><span class="buy">GTT Buy</span></label>
+          <label><input type="radio" name="side" value="sell"><span class="sell">GTT Sell</span></label>
+        </div>{% endif %}</div>
+      <div class="pb">
+      {% if not broker.to or not broker.accounts %}
+        <p class="muted small">Add the broker's email addresses and your account codes in <a href="{{ B }}/settings#broker" style="text-decoration:underline">Settings</a> first.</p>
+      {% else %}
+        <label class="field acct">Account
+          <select name="account">{% for a in broker.accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+        <div class="lines" style="display:grid;gap:6px">
+          <div class="lh field"><span>Quantity</span><span>Trigger price {{ M.cur }}</span><span></span></div>
+          <div class="ol" id="lines"></div>
+          <button type="button" class="btn ghost sm addline">{{ icon('plus', 14) }}Add a line</button>
+        </div>
+        <div class="preview">
+          <p class="muted">Email preview · to {{ broker.to.split(',')|length }} address{{ 'es' if broker.to.split(',')|length != 1 }}</p>
+          <p><b>Subject</b> <span id="pv-subject"></span></p>
+          <pre id="pv-body"></pre>
+        </div>
+        <button type="button" class="btn go" id="opengmail" disabled>{{ icon('mail', 16) }}Open in Gmail to send</button>
+        <p class="faint small">Draft only. Nothing sends until you press Send in Gmail.</p>
+      {% endif %}
+      {% if orders %}
+        <details class="peek" id="orders-{{ p.isin }}" style="margin:0 -16px -14px"><summary>{{ icon('history', 14) }}Orders prepared · {{ orders|length }}{{ icon('chevdown', 14, 'tw') }}</summary>
+          <div><ul class="olog">{% for o in orders %}<li><span class="chip {{ o.side }}">{{ 'Buy' if o.side == 'buy' else 'Sell' }}</span> {{ o.account }} · {{ o.created|day }} · <span class="mono">{% for l in o.lines %}{{ l.qty }}×{{ M.cur }}{{ '%g'|format(l.price) }}{{ ', ' if not loop.last }}{% endfor %}</span></li>{% endfor %}</ul></div>
+        </details>{% endif %}
+      </div>
+    </section>
+    {% endif %}
+
+    <details class="panel" id="news" {{ 'open' if p.status in ('news','council') }}>
+      <summary class="ph"><h2>{{ icon('news', 16) }}News the AIs read</h2><span class="r">{{ cost((p.news or {}).cost) }}{{ icon('chevdown', 14, 'tw') }}</span></summary>
+      <div class="pb md">{{ (p.news or {}).text | md | safe }}</div>
+    </details>
+  </div>
+</div>
 
 {% if peers and peers|length > 1 %}
-<h2 class="sub">{{ icon('council', 18) }}Same industry <span class="muted small">{{ (p.sheet.fundamentals or {}).industry or peers[0].industry }}</span></h2>
-<div class="tblwrap card"><table class="tbl peers">
-  <tr><th>Company</th><th>Market cap {{ M.cur }} {{ M.unit_label }}</th><th>P/E</th><th>ROE %</th><th>Sales growth %</th><th>1-yr return %</th></tr>
-  {% for q in peers %}<tr class="{{ 'hl' if q.isin == p.isin }}"><td>{{ (q.name or q.symbol)|nice }}</td><td>{{ '{:,.0f}'.format(q.mcap) if q.mcap == q.mcap else '–' }}</td><td>{{ '%.1f'|format(q.pe) if q.pe == q.pe and q.pe is not none else '–' }}</td><td>{{ '%.1f'|format(q.roe) if q.roe is not none and q.roe == q.roe else '–' }}</td><td>{{ '%.1f'|format(q.sales_cagr_3y) if q.sales_cagr_3y is not none and q.sales_cagr_3y == q.sales_cagr_3y else '–' }}</td><td class="{{ 'neg' if q.ret_1y < 0 }}">{{ '%.1f'|format(q.ret_1y) if q.ret_1y == q.ret_1y else '–' }}</td></tr>{% endfor %}
-</table></div>
+<section class="panel">
+  <div class="ph"><h2>{{ icon('council', 16) }}Same industry</h2><span class="r">{{ f.industry or peers[0].industry }}</span></div>
+  <div class="tblwrap"><table class="tbl peers">
+    <tr><th>Company</th><th>Mkt cap {{ M.cur }} {{ M.unit_label }}</th><th>P/E</th><th>ROE %</th><th>Sales growth %</th><th>1-yr return %</th></tr>
+    {% for q in peers %}<tr class="{{ 'me' if q.isin == p.isin }}"><td>{{ (q.name or q.symbol)|nice }}</td><td>{{ '{:,.0f}'.format(q.mcap) if q.mcap == q.mcap else '–' }}</td><td>{{ '%.1f'|format(q.pe) if q.pe == q.pe and q.pe is not none else '–' }}</td><td>{{ '%.1f'|format(q.roe) if q.roe is not none and q.roe == q.roe else '–' }}</td><td class="{{ 'neg' if q.sales_cagr_3y is not none and q.sales_cagr_3y < 0 }}">{{ '%.1f'|format(q.sales_cagr_3y) if q.sales_cagr_3y is not none and q.sales_cagr_3y == q.sales_cagr_3y else '–' }}</td><td class="{{ 'neg' if q.ret_1y < 0 else 'pos' }}">{{ '%.1f'|format(q.ret_1y) if q.ret_1y == q.ret_1y else '–' }}</td></tr>{% endfor %}
+  </table></div>
+</section>
 {% endif %}
-<details class="fold card" id="news" {{ 'open' if p.status in ('news','council') }}>
-  <summary>{{ icon('news', 18) }}<b>News the AIs read</b>{{ icon('chevdown', 16, 'tw') }}</summary>
-  <div class="md small">{{ (p.news or {}).text | md | safe }}</div>
-</details>
-<details class="fold card" id="sheet">
-  <summary>{{ icon('file', 18) }}<b>Full fact sheet</b><span class="muted small">what every AI read</span>{{ icon('chevdown', 16, 'tw') }}</summary>
+
+<details class="panel" id="sheet">
+  <summary class="ph"><h2>{{ icon('file', 16) }}Full fact sheet</h2><span class="r">what every AI read {{ icon('chevdown', 14, 'tw') }}</span></summary>
   <div class="fs-body">{% include "_sheet.html" %}</div>
 </details>
 </div>
 {% endblock %}
-{% block scripts %}<script src="/static/live.js?v=2"></script><script src="/static/order.js?v=2"></script><script src="/static/holdings.js?v=3"></script>{% endblock %}
+{% block scripts %}<script src="/static/live.js?v={{ BUILD }}"></script><script src="/static/order.js?v={{ BUILD }}"></script><script src="/static/holdings.js?v={{ BUILD }}"></script>{% endblock %}

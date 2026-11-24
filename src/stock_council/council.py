@@ -14,6 +14,8 @@ from collections import Counter
 
 import httpx
 
+from .telemetry import log_call
+
 log = logging.getLogger(__name__)
 
 URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -81,7 +83,8 @@ def _key() -> str:
     return k
 
 
-def _chat(model: str, messages: list[dict], *, json_mode=False, plugins=None, max_tokens=12000, timeout=300) -> dict:
+def _chat(model: str, messages: list[dict], *, json_mode=False, plugins=None, max_tokens=12000, timeout=300,
+          purpose: str = "", ctx: dict | None = None) -> dict:
     # Thinking models spend tokens before answering: room for both, and a medium thinking budget.
     body = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.3,
             "reasoning": {"effort": "medium", "exclude": True}, "usage": {"include": True}}
@@ -92,12 +95,14 @@ def _chat(model: str, messages: list[dict], *, json_mode=False, plugins=None, ma
     headers = {"Authorization": f"Bearer {_key()}", "X-Title": "stock-council",
                "HTTP-Referer": "https://screen.parthchandak.info"}
     last = None
+    t0 = time.time()
     for attempt in range(3):
         try:
             r = httpx.post(URL, json=body, headers=headers, timeout=timeout)
             if r.status_code == 200:
                 data = r.json()
                 if data.get("choices"):
+                    log_call(model, purpose, ctx, data.get("usage"), time.time() - t0)
                     return data
                 last = f"no choices: {str(data)[:300]}"
             else:
@@ -105,20 +110,24 @@ def _chat(model: str, messages: list[dict], *, json_mode=False, plugins=None, ma
         except httpx.HTTPError as e:
             last = str(e)
         time.sleep(4 * (attempt + 1))
+    log_call(model, purpose, ctx, None, time.time() - t0, error=last or "failed")
     raise RuntimeError(f"{model}: {last}")
 
 
-def news_digest(name: str, symbol: str) -> dict:
+def news_digest(name: str, symbol: str, ctx: dict | None = None) -> dict:
     where = f"(ticker {symbol}), a US listed company" if IS_US else f"(NSE: {symbol}), an Indian listed company"
     prompt = (f"Find the most important news from the last 6 months about {name} {where}: "
               "quarterly results, order wins, capacity expansion, management commentary, fund raising, promoter actions, "
               "regulatory issues, and any reason for unusual trading volume in the last week. "
               "Reply with up to 10 dated bullet points, newest first, each with its source site. Facts only, no opinion.")
     data = _chat(NEWS_MODEL, [{"role": "user", "content": prompt}],
-                 plugins=[{"id": "web", "engine": NEWS_ENGINE, "max_results": 8}], max_tokens=4000)
+                 plugins=[{"id": "web", "engine": NEWS_ENGINE, "max_results": 8}], max_tokens=4000,
+                 purpose="news", ctx=ctx)
     msg = data["choices"][0]["message"]
     sources = [a["url_citation"]["url"] for a in msg.get("annotations") or [] if a.get("type") == "url_citation"]
-    return {"text": (msg.get("content") or "").strip(), "sources": sources, "cost": (data.get("usage") or {}).get("cost")}
+    u = data.get("usage") or {}
+    return {"text": (msg.get("content") or "").strip(), "sources": sources, "cost": u.get("cost"),
+            "tokens": [u.get("prompt_tokens"), u.get("completion_tokens")]}
 
 
 def _parse(text: str) -> dict:
@@ -137,21 +146,23 @@ def _parse(text: str) -> dict:
     return d
 
 
-def ask_member(member: dict, prompt: str, sheet_md: str, news: str) -> dict:
+def ask_member(member: dict, prompt: str, sheet_md: str, news: str, ctx: dict | None = None) -> dict:
     t0 = time.time()
     msgs = [{"role": "system", "content": SYSTEM},
             {"role": "user", "content": f"{prompt}\n\n=== FACT SHEET ===\n{sheet_md}\n\n=== NEWS DIGEST ===\n{news}"}]
     out = {"name": member["name"], "model": member["model"]}
     try:
-        data = _chat(member["model"], msgs, json_mode=True)
+        data = _chat(member["model"], msgs, json_mode=True, purpose=member["name"], ctx=ctx)
         content = data["choices"][0]["message"].get("content") or ""
         try:
             out.update(_parse(content))
         except (ValueError, json.JSONDecodeError):
             # one retry without JSON mode for models that ignore it
-            data = _chat(member["model"], msgs)
+            data = _chat(member["model"], msgs, purpose=member["name"] + " (retry)", ctx=ctx)
             out.update(_parse(data["choices"][0]["message"].get("content") or ""))
-        out["cost"] = (data.get("usage") or {}).get("cost")
+        u = data.get("usage") or {}
+        out["cost"] = u.get("cost")
+        out["tokens"] = [u.get("prompt_tokens"), u.get("completion_tokens")]
     except Exception as e:
         out["error"] = str(e)[:300]
     out["seconds"] = round(time.time() - t0, 1)
@@ -181,14 +192,16 @@ def tally(opinions: list[dict]) -> dict:
 
 
 def run(sheet: dict, sheet_md: str, prompt: str = DEFAULT_PROMPT, members=COUNCIL,
-        on_news=None, on_opinion=None) -> dict:
+        on_news=None, on_opinion=None, ctx: dict | None = None) -> dict:
     """All members answer at the same time; on_opinion(list_so_far) fires as each one lands."""
-    news = news_digest(sheet["name"], sheet.get("nse_symbol") or sheet.get("bse_symbol"))
+    ctx = {**(ctx or {}), "isin": (ctx or {}).get("isin") or sheet.get("isin"),
+           "symbol": sheet.get("nse_symbol") or sheet.get("bse_symbol")}
+    news = news_digest(sheet["name"], sheet.get("nse_symbol") or sheet.get("bse_symbol"), ctx=ctx)
     if on_news:
         on_news(news)
     slots: list[dict] = [{"name": m["name"], "model": m["model"], "pending": True} for m in members]
     with cf.ThreadPoolExecutor(max_workers=len(members)) as ex:
-        futs = {ex.submit(ask_member, m, prompt, sheet_md, news["text"]): i for i, m in enumerate(members)}
+        futs = {ex.submit(ask_member, m, prompt, sheet_md, news["text"], ctx): i for i, m in enumerate(members)}
         for fut in cf.as_completed(futs):
             slots[futs[fut]] = fut.result()
             if on_opinion:

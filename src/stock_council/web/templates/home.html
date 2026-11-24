@@ -1,73 +1,97 @@
-{% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, agree, change %}
+{% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, score, change, cost %}
 {% block main %}
 {% for r in running %}
-<a class="live card" href="{{ B }}/run/{{ r.id }}">
-  <span class="pulse"></span>
+<a class="live panel" href="{{ B }}/run/{{ r.id }}">
+  <span class="livedot"></span>
   <span><b>{{ 'Screen running' if r.kind != 'on_demand' else 'Checking a stock' }}</b>
   <span class="muted">· {{ {'download':'downloading files','scan':'scanning volumes','filter':'checking fundamentals','council':'council is voting'}.get(r.stage, 'working') }}</span></span>
   <span class="go">Watch {{ icon('chev', 16) }}</span>
 </a>
 {% endfor %}
 
-<form class="ask" method="post" action="{{ B }}/check" autocomplete="off">
-  {{ icon('search', 18) }}
-  <input name="symbol" placeholder="{{ 'Any ticker, e.g. NVDA' if IS_US else 'Any NSE symbol' }}" required aria-label="NSE symbol">
-  <button>Ask</button>
-</form>
+<div class="pagehead">
+  <div>
+    {% if run %}<h1>{{ picks|length }} stock{{ 's' if picks|length != 1 }} worth a look</h1>
+    <p>Screen of {{ run.day|day }}{% if run.finished %}, {{ M.close }} close{% endif %} {{ cost(run.cost_usd, '· AI cost ') }}</p>
+    {% else %}<h1>Today</h1><p>No screen yet</p>{% endif %}
+  </div>
+  <form class="ask" method="post" action="{{ B }}/check" autocomplete="off">
+    {{ icon('search', 16) }}
+    <input name="symbol" placeholder="{{ 'Any ticker, e.g. NVDA' if IS_US else 'Any NSE symbol' }}" required aria-label="Stock to check">
+    <button>Check</button>
+  </form>
+</div>
 
 {% if run %}
 {% set fn = run.funnel or {} %}
-<section class="head">
-  <div>
-    <p class="eyebrow">Screen · {{ run.day|day }}</p>
-    <h1>{{ picks|length }} stock{{ 's' if picks|length != 1 }} worth a look</h1>
-  </div>
-  <a class="howlink" href="{{ B }}/run/{{ run.id }}">{{ icon('target', 16) }}How these were found</a>
-</section>
-<a class="funnel" href="{{ B }}/run/{{ run.id }}" aria-label="How the list was found">
-  <span><b>{{ (fn.companies or 0)|num }}</b>companies</span>{{ icon('chev', 14, 'sep') }}
-  <span><b>{{ run.spikes or '-' }}</b>volume spikes</span>{{ icon('chev', 14, 'sep') }}
-  <span><b>{{ picks|length }}</b>pass filters</span>{{ icon('chev', 14, 'sep') }}
-  <span><b>{{ run.models|length }}</b>AIs vote</span>
+{% set total = fn.companies or 1 %}
+{% set steps = [(fn.companies or 0, 'companies'), (run.spikes or 0, 'volume spikes'), (picks|length, 'pass filters'), (run.models|length, 'AIs vote')] %}
+<a class="panel funnel" href="{{ B }}/run/{{ run.id }}" aria-label="How the list was found">
+  {% for n, label in steps %}
+  {% set w = 100 if loop.first else ([[ (n / total) ** 0.35 * 100, 3]|max, 100]|min) %}
+  <div><div class="lab"><span>{{ label }}</span>{% if loop.last %}{{ icon('chev', 14, 'chev') }}{% endif %}</div><div class="val">{{ n|num }}</div><div class="bar" style="width:{{ w }}%"></div></div>
+  {% endfor %}
 </a>
+{% endif %}
 
-<ul class="stocks">
-{% for p in picks %}{% set s = p.sheet or {} %}
-<li><a href="{{ B }}/stock/{{ run.id }}/{{ p.isin }}" class="row">
-  <span class="who"><b>{{ (p.name or p.symbol)|nice }}</b><span class="muted">{{ p.symbol }} · {{ p.price|inr }} {{ change(s.change_pct) }}</span></span>
-  <span class="vote">{{ verdict(p.verdict) }}{{ dots(p.opinions) }}</span>
-  <span class="score"><b>{{ (p.verdict or {}).avg_score or '–' }}</b><span class="muted">/10</span></span>
-  {{ icon('chev', 18, 'chev') }}
-</a></li>
-{% else %}
-<li class="empty small">No stock passed every filter that day.</li>
-{% endfor %}
-</ul>
-<p class="legend muted">{{ icon('info', 14) }} Each dot is one AI's vote: <i class="dot buy"></i> buy <i class="dot hold"></i> hold <i class="dot sell"></i> sell. Score is the average out of 10.</p>
-{% else %}
-<div class="empty card">
-  {{ icon('clock', 36, '', 'd') }}
-  <h1>No screen yet</h1>
-  <p class="muted">It runs by itself on weekdays at 8:15 pm, after the market files are out.</p>
-  <form method="post" action="{{ B }}/screen"><button class="btn">{{ icon('play', 16) }}Run it now</button></form>
+<div class="two">
+  <div class="col">
+  {% if run %}
+    <section class="panel">
+      <div class="ph"><h2>{{ icon('council', 16) }}Council picks</h2><span class="r">each block is one AI's vote</span></div>
+      <div class="rows">
+      {% for p in picks %}{% set s = p.sheet or {} %}
+        <a class="pick" href="{{ B }}/stock/{{ run.id }}/{{ p.isin }}">
+          <span class="nm"><b>{{ (p.name or p.symbol)|nice }}</b><span>{{ p.symbol }} · {{ p.price|inr }} {{ change(s.change_pct) }}{% if s.spike_x %} · vol {{ s.spike_x }}×{% endif %}</span></span>
+          {{ dots(p.opinions) }}{{ verdict(p.verdict) }}{{ score((p.verdict or {}).avg_score) }}{{ icon('chev', 16, 'chev') }}
+        </a>
+      {% else %}
+        <div class="empty small muted">No stock passed every filter that day.</div>
+      {% endfor %}
+      </div>
+    </section>
+  {% else %}
+    <section class="panel empty">
+      {{ icon('clock', 32, '', 'd') }}
+      <h2>No screen yet</h2>
+      <p class="muted">It runs by itself on weekdays at {{ M.default_time }}, after the market files are out.</p>
+      <form method="post" action="{{ B }}/screen"><button class="btn">{{ icon('play', 16) }}Run it now</button></form>
+    </section>
+  {% endif %}
+  </div>
+
+  <div class="col">
+    <section class="panel">
+      <div class="ph"><h2>{{ icon('search', 16) }}You checked</h2><span class="r">{{ checks|length }}</span></div>
+      {% if checks %}
+      <div class="rows">
+      {% for c in checks %}
+        <a class="checked" href="{{ B }}/run/{{ c.id }}">
+          <span class="nm"><b>{{ (c.name or c.symbol or '')|nice }}</b><span>{{ c.symbol }} · {{ c.day|day }}</span></span>
+          {% if c.status == 'running' %}<span class="chip none">{{ icon('spin', 13, 'spin') }}Working</span>{% elif c.status == 'failed' %}<span class="chip sell">Failed</span>{% else %}{{ verdict(c.verdict) }}{% endif %}
+          <b class="mono" style="text-align:right;font-weight:500">{{ c.verdict.avg_score or '–' }}</b>
+          {{ icon('chev', 16, 'chev') }}
+        </a>
+      {% endfor %}
+      </div>
+      {% else %}<div class="pb muted small">Type a {{ 'ticker' if IS_US else 'symbol' }} above to ask the council about any stock.</div>{% endif %}
+    </section>
+    {% if track and track.n %}
+    <a class="panel" href="{{ B }}/track">
+      <div class="ph"><h2>{{ icon('target', 16) }}Track record</h2><span class="r">{{ track.n }} buy calls {{ icon('chev', 14, 'chev') }}</span></div>
+      <div class="grid c2">
+        <div><div class="lab"><span>Buy calls up</span></div><div class="val">{{ track.up }}<small>of {{ track.n }}</small></div><div class="gauge"><i class="bg-good" style="width:{{ (track.up / track.n * 100)|round(0) }}%"></i><u style="left:50%"></u></div></div>
+        <div><div class="lab"><span>Average move</span></div><div class="val {{ 'good' if track.avg > 0 else 'bad' if track.avg < 0 }}">{{ '%+.1f'|format(track.avg) }}<small>%</small></div><div class="hint">since each call</div></div>
+      </div>
+    </a>
+    {% endif %}
+    <section class="panel">
+      <form method="post" action="{{ B }}/screen" class="pb" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <div><b style="font-weight:600">Run the screen again</b><div class="muted small">about 5 min{% if show_costs() %} · about ${{ '%.2f'|format((avg_stock or 0.06) * 8) }}{% endif %}</div></div>
+        <button class="btn ghost">{{ icon('play', 15) }}Run now</button>
+      </form>
+    </section>
+  </div>
 </div>
-{% endif %}
-
-{% if checks %}
-<h2 class="sub">Stocks you checked</h2>
-<ul class="stocks compact">
-{% for c in checks %}
-<li><a class="row" href="{{ B }}/run/{{ c.id }}">
-  <span class="who"><b>{{ (c.name or c.symbol or '')|nice }}</b><span class="muted">{{ c.symbol }} · {{ c.day|day }}</span></span>
-  <span class="vote">{% if c.status == 'running' %}<span class="chip none">{{ icon('spin', 14, 'spin') }}Working</span>{% elif c.status == 'failed' %}<span class="chip sell">{{ icon('alert', 14) }}Failed</span>{% else %}{{ verdict(c.verdict) }}{% endif %}</span>
-  <span class="score"><b>{{ c.verdict.avg_score or '–' }}</b><span class="muted">/10</span></span>
-  {{ icon('chev', 18, 'chev') }}
-</a></li>
-{% endfor %}
-</ul>
-{% endif %}
-{% if run %}
-<form method="post" action="{{ B }}/screen" class="rerun"><button class="btn ghost">{{ icon('play', 14) }}Run the screen again now</button><span class="muted small">takes ~5 min · about $0.50</span></form>
-{% endif %}
 {% endblock %}
 {% block scripts %}{% if running %}<script>setTimeout(() => location.reload(), 15000)</script>{% endif %}{% endblock %}

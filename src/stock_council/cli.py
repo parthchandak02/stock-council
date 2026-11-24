@@ -119,6 +119,8 @@ def main() -> None:
     wa = sub.add_parser("whatsapp", help="(re)send the WhatsApp message for a run")
     wa.add_argument("run_id", type=int)
     wa.add_argument("--dry", action="store_true", help="print it instead of sending")
+    bk = sub.add_parser("backup", help="back up settings, runs, orders (not market data) to /srv/backups/stock-council")
+    bk.add_argument("--restore", metavar="FILE.sqlite.gz")
     e = sub.add_parser("email")
     e.add_argument("run_id", type=int)
     sv = sub.add_parser("serve")
@@ -184,6 +186,13 @@ def main() -> None:
         else:
             send_run_whatsapp(a.run_id)
             print("sent")
+    elif a.cmd == "backup":
+        from .backup import restore, run
+        if a.restore:
+            restore(a.restore)
+            print("restored", a.restore)
+        else:
+            print(run())
     elif a.cmd == "email":
         send_run_email(a.run_id)
     elif a.cmd == "serve":

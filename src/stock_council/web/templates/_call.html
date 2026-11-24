@@ -1,0 +1,5 @@
+{% set v = p.verdict or {} %}{% set c = v.call or ('ERROR' if p.error else '-') %}
+<span class="call {{ c.split()[0] }}">{{ c }}{% if c == 'NO CONSENSUS' and v.lean %} <span class="small mute">(leans {{ v.lean }})</span>{% endif %}</span>
+<div class="small mute">{{ v.agree or 0 }}/{{ v.voters or 0 }} agree · {{ v.avg_score or '-' }}/10</div>
+{% set vs = v.votes or {} %}{% set n = (v.voters or 1) %}
+<div class="bar"><span class="b" style="width:{{ 100*(vs.BUY or 0)/n }}%"></span><span class="h" style="width:{{ 100*(vs.HOLD or 0)/n }}%"></span><span class="s" style="width:{{ 100*(vs.SELL or 0)/n }}%"></span></div>

@@ -61,10 +61,27 @@ def analyse(conn, run_id: int, symbol: str, st: dict, nse: NSE) -> dict:
     return res
 
 
-def run_daily(max_stocks: int = 20) -> int:
+class NothingToDo(Exception):
+    pass
+
+
+def ist_today() -> str:
+    from .exchanges import ist_today as d
+    return d().isoformat()
+
+
+def run_daily(max_stocks: int = 20, require_today: bool = False) -> int:
+    """The evening job. With require_today it is safe to schedule twice an evening: it does nothing
+    if today's exchange files are not out yet (or it is a holiday), or if today already ran."""
     conn = db()
     st = get_settings(conn)
     update(history_days=10)
+    from .screen import trading_dates
+    latest = trading_dates(conn, 1)[0]
+    if require_today and latest != ist_today():
+        raise NothingToDo(f"no exchange data for {ist_today()} yet (latest {latest})")
+    if conn.execute("SELECT 1 FROM runs WHERE kind='daily' AND day=? AND status='done'", (latest,)).fetchone():
+        raise NothingToDo(f"daily run for {latest} already done")
     screen = run_screen(st["filters"])
     run_id = _start(conn, screen.date, "daily", st)
     conn.execute("UPDATE runs SET spikes=? WHERE id=?", (screen.spikes, run_id))

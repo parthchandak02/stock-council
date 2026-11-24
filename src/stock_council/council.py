@@ -117,7 +117,7 @@ def _parse(text: str) -> dict:
         d["score"] = round(float(d.get("score")), 1)
     except (TypeError, ValueError):
         d["score"] = None
-    d["lines"] = [str(x) for x in (d.get("lines") or [])][:12]
+    d["lines"] = [re.sub(r"^\s*(\d+[.)]|[-*•])\s*", "", str(x)) for x in (d.get("lines") or [])][:12]
     return d
 
 

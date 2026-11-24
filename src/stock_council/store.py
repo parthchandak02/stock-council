@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS daily (
     PRIMARY KEY (date, exch, isin)
 );
 CREATE INDEX IF NOT EXISTS daily_isin ON daily(isin, date);
+CREATE INDEX IF NOT EXISTS daily_code ON daily(date, exch, code);
+CREATE INDEX IF NOT EXISTS daily_sym ON daily(date, exch, symbol, series);
 CREATE TABLE IF NOT EXISTS fetched (
     date TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL,
     PRIMARY KEY (date, kind)

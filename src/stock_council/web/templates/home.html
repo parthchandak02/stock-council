@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block head %}{% if running %}<meta http-equiv="refresh" content="20">{% endif %}{% endblock %}
+{% block main %}
+{% if request.query_params.get('started') %}<div class="flash">Analysing {{ request.query_params.get('started') }}… about 2–3 minutes. This page refreshes itself.</div>{% endif %}
+{% if not past %}
+<form class="go card" method="post" action="/analyse" style="margin-bottom:18px">
+  <input type="text" name="symbol" placeholder="Any NSE symbol, e.g. GARFIBRES" required style="flex:1;min-width:200px" autocomplete="off">
+  <button>Ask the council</button>
+</form>
+{% for r in running %}<div class="flash">Running {{ 'daily screen' if r.kind=='daily' else 'analysis' }} started {{ r.started[11:16] }} UTC…</div>{% endfor %}
+{% endif %}
+{% if run %}
+<h1>{{ 'Screen' if run.kind=='daily' else 'Analysis' }} · {{ run.day }}</h1>
+<p class="mute small">{{ picks|length }} passed · {{ run.spikes or 0 }} volume spikes checked</p>
+<div class="card scroll"><table>
+<tr><th>Stock</th><th class="num">Price</th><th class="num hide-sm">Volume</th><th class="num hide-sm">Delivery</th><th>Council</th><th class="hide-sm">Main risk</th></tr>
+{% for p in picks %}{% set s = p.sheet or {} %}
+<tr class="row"><td><a href="/stock/{{ run.id }}/{{ p.isin }}"><b>{{ p.name }}</b></a><div class="small mute">{{ p.symbol }}</div></td>
+<td class="num">₹{{ p.price }}<div class="small mute">{{ s.change_pct }}%</div></td>
+<td class="num hide-sm">{{ s.spike_x or '-' }}×</td>
+<td class="num hide-sm">{{ (s.technicals or {}).delivery_pct_today or '-' }}%</td>
+<td>{% include "_call.html" %}</td>
+<td class="hide-sm small">{% for o in (p.opinions or []) if o.key_risk and group(o.verdict) == (p.verdict or {}).lean %}{% if loop.first %}{{ o.key_risk }}{% endif %}{% endfor %}{% if p.error %}<span class="SELL">{{ p.error[:120] }}</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="mute">No stock passed all filters today.</td></tr>{% endfor %}
+</table></div>
+{% else %}<p class="mute">No daily screen yet. The first one runs this evening.</p>{% endif %}
+{% if recent %}<h2>Recent one-off analyses</h2><div class="card"><table>
+{% for r in recent %}{% set p = {'verdict': r.verdict} %}<tr class="row"><td><a href="/stock/{{ r.id }}/{{ r.isin }}"><b>{{ r.name }}</b></a><div class="small mute">{{ r.symbol }} · {{ r.day }}</div></td><td>{% include "_call.html" %}</td></tr>{% endfor %}
+</table></div>{% endif %}
+{% endblock %}

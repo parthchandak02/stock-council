@@ -85,7 +85,7 @@ def _udiff_rows(text: str, exch: str, d: date):
 def _mark(conn, d: date, kind: str, status: str) -> None:
     # A file that is not there yet for the last few days may simply not be published yet:
     # only remember 'missing' (holiday) for older dates, so recent days are retried.
-    if status == "missing" and (date.today() - d).days < 4:
+    if status == "missing" and (ist_today() - d).days < 4:
         return
     conn.execute("INSERT OR REPLACE INTO fetched VALUES (?,?,?)", (d.isoformat(), kind, status))
 
@@ -168,7 +168,7 @@ def weekdays_back(end: date, n_calendar_days: int):
 
 def update(end: date | None = None, history_days: int = 380, delivery_days: int = 45) -> dict:
     """Bring the database up to date: ~1 year of bhavcopies, ~6 weeks of delivery data."""
-    end = end or date.today()
+    end = end or ist_today()
     conn = connect()
     stats = {"days": 0}
     for i, d in enumerate(weekdays_back(end, history_days)):
@@ -180,6 +180,12 @@ def update(end: date | None = None, history_days: int = 380, delivery_days: int 
             log.info("…%s", d)
     stats["latest"] = latest_date(conn)
     return stats
+
+
+def ist_today() -> date:
+    """Indian market date, whatever the server's time zone (the VPS runs on US Pacific)."""
+    from datetime import datetime, timezone
+    return (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date()
 
 
 def latest_date(conn) -> str | None:

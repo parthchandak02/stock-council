@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block main %}
+<h1>History</h1><p class="mute small">Every run is kept, so we can later check which calls were right.</p>
+<div class="card"><table><tr><th>Day</th><th>Type</th><th class="num">Stocks</th><th class="num hide-sm">Cost</th><th>Status</th></tr>
+{% for r in runs %}<tr class="row"><td><a href="{{ '/day/' ~ r.id if r.kind=='daily' else '/run/' ~ r.id }}">{{ r.day }}</a></td><td>{{ 'Screen' if r.kind=='daily' else 'One stock' }}</td>
+<td class="num">{{ r.n }}</td><td class="num hide-sm">${{ '%.2f'|format(r.cost_usd or 0) }}</td><td class="small {{ 'SELL' if r.status=='failed' }}">{{ r.status }}</td></tr>{% endfor %}
+</table></div>{% endblock %}

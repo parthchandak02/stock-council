@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block title %}{{ p.name }} · Stock Council{% endblock %}
+{% block main %}{% set s = p.sheet or {} %}{% set t = s.technicals or {} %}{% set f = s.fundamentals or {} %}{% set v = p.verdict or {} %}
+<p class="small mute"><a href="/day/{{ run.id }}">← {{ run.day }}</a></p>
+<h1>{{ p.name }} <span class="mute small">{{ p.symbol }}</span></h1>
+<div class="kpis">
+ <div>{% include "_call.html" %}</div>
+ <div><b>₹{{ p.price }}</b><span>{{ s.change_pct }}% today</span></div>
+ <div><b>{{ s.spike_x or '-' }}×</b><span>volume spike</span></div>
+ <div><b>{{ t.delivery_pct_today or '-' }}%</b><span>delivery (avg {{ t.delivery_pct_30d_avg }}%)</span></div>
+ <div><b>{{ v.stop_losses[0] if v.stop_losses else '-' }}–{{ v.stop_losses[-1] if v.stop_losses else '-' }}</b><span>stop-loss range</span></div>
+</div>
+{% if p.error %}<div class="flash SELL">{{ p.error }}</div>{% endif %}
+<h2>The council</h2>
+<div class="grid">{% for o in p.opinions or [] %}
+<div class="card op"><h3><span>{{ o.name }}</span>{% if o.error %}<span class="mute small">no answer</span>{% else %}<span class="call {{ group(o.verdict) }}">{{ o.verdict }} · {{ o.score }}</span>{% endif %}</h3>
+{% if o.error %}<p class="small mute">{{ o.error[:160] }}</p>{% else %}
+<div class="small mute">{% if o.stop_loss %}Stop ₹{{ o.stop_loss }}{% endif %}{% if o.entry_zone %} · Entry {{ o.entry_zone }}{% endif %}</div>
+<ol>{% for l in o.lines %}<li>{{ l }}</li>{% endfor %}</ol>
+{% if o.trigger_to_change_view %}<p class="small"><b>Would change view if:</b> {{ o.trigger_to_change_view }}</p>{% endif %}{% endif %}
+</div>{% endfor %}</div>
+<h2>News</h2>
+<div class="card small">{{ (p.news or {}).text | md | safe }}</div>
+<h2>Fact sheet</h2>
+<div class="card sheet scroll">{{ p.sheet_md | md | safe }}</div>
+<p class="small mute">Facts: NSE/BSE daily files and filings, company financials. Opinions: AI models via OpenRouter. Not investment advice.</p>
+{% endblock %}

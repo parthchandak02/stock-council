@@ -67,7 +67,9 @@ def build(symbol: str, nse: NSE | None = None) -> dict:
     isin = _isin_for(conn, symbol)
     day = trading_dates(conn, 1)[0]
     ident = identity(conn, isin, day)
-    sheet = {"as_of": day, **ident, "technicals": technicals(conn, isin)}
+    tech = technicals(conn, isin)
+    sheet = {"as_of": day, **ident, "technicals": tech,
+             "spike_x": round(tech["volume_1w_avg"] / max(tech["volume_1y_avg"], 1), 1)}
     sheet["fundamentals"] = get_fundamentals(conn, ident)
     if ident["nse_symbol"]:
         key = f"nse:{ident['nse_symbol']}"

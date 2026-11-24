@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block main %}
+<h1>Settings</h1>
+{% if saved %}<div class="flash">Saved. Used from the next run.</div>{% endif %}
+<form method="post" action="/settings">
+<h2>Screen filters</h2><div class="card grid">
+{% for k, label in labels.items() %}<label class="small">{{ label }}<br><input type="number" step="any" name="{{ k }}" value="{{ st.filters[k] }}" style="width:100%"></label>{% endfor %}
+</div>
+<h2>Question for the council</h2>
+<p class="small mute">Every AI gets this plus the same fact sheet and news. Changing it makes new scores less comparable with old ones.</p>
+<textarea name="prompt" rows="14" style="width:100%">{{ st.prompt }}</textarea>
+<h2>Council members</h2>
+<p class="small mute">One per line: Name | OpenRouter model id</p>
+<textarea name="models" rows="8" style="width:100%;font-family:ui-monospace,monospace;font-size:13px">{{ models_text }}</textarea>
+<p><button>Save</button> <button class="ghost" name="reset" value="prompt">Restore original question</button></p>
+</form>{% endblock %}

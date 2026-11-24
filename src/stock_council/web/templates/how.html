@@ -8,16 +8,16 @@
 </section>
 
 <ol class="how">
-  <li class="card"><span class="hn">1</span>{{ icon('download', 22) }}<h3>Collect</h3><p>The day's closing price, volume and delivery for ~5,000 companies, straight from NSE and BSE.</p></li>
-  <li class="card"><span class="hn">2</span>{{ icon('volume', 22) }}<h3>Spot the shock</h3><p>Keep stocks trading over <b>{{ st.filters.volume_spike_multiple|round(1) }}×</b> their usual volume this week. Big money often shows up as volume first.</p></li>
-  <li class="card"><span class="hn">3</span>{{ icon('scale', 22) }}<h3>Check the business</h3><p>Drop anything small, loss-making, expensive or in debt:</p>
+  <li class="card"><span class="hn">1</span>{{ icon('download', 28, '', 'd') }}<h3>Collect</h3><p>The day's closing price, volume and delivery for ~5,000 companies, straight from NSE and BSE.</p></li>
+  <li class="card"><span class="hn">2</span>{{ icon('volume', 28, '', 'd') }}<h3>Spot the shock</h3><p>Keep stocks trading over <b>{{ st.filters.volume_spike_multiple|round(1) }}×</b> their usual volume this week. Big money often shows up as volume first.</p></li>
+  <li class="card"><span class="hn">3</span>{{ icon('scale', 28, '', 'd') }}<h3>Check the business</h3><p>Drop anything small, loss-making, expensive or in debt:</p>
     <p class="filters"><span class="tag">Market cap &gt; ₹{{ st.filters.min_market_cap_cr|int }} Cr</span><span class="tag">P/E &lt; {{ st.filters.max_pe|int }}</span><span class="tag">ROE &gt; {{ st.filters.min_roe_pct|int }}%</span><span class="tag">Debt/equity &lt; {{ st.filters.max_debt_to_equity }}</span></p></li>
-  <li class="card"><span class="hn">4</span>{{ icon('council', 22) }}<h3>Ask the council</h3><p>Each survivor gets a fact sheet and a news search. All AIs read the same facts and vote <b>Buy, Hold or Sell</b> with a score out of 10.</p></li>
+  <li class="card"><span class="hn">4</span>{{ icon('council', 28, '', 'd') }}<h3>Ask the council</h3><p>Each survivor gets a fact sheet and a news search. All AIs read the same facts and vote <b>Buy, Hold or Sell</b> with a score out of 10.</p></li>
 </ol>
 
 <div class="split2">
-  <div class="card"><h3>{{ icon('shield', 18) }}Facts</h3><p class="muted">Computed from official filings, the same every time: cash flow, debt, promoter pledge, who's buying, delivery, ratios.</p></div>
-  <div class="card"><h3>{{ icon('council', 18) }}Opinions</h3><p class="muted">Only the judgement comes from AI: outlook, risks, the call. When they split, the page says so.</p></div>
+  <div class="card"><h3>{{ icon('shield', 22, '', 'd') }}Facts</h3><p class="muted">Computed from official filings, the same every time: cash flow, debt, promoter pledge, who's buying, delivery, ratios.</p></div>
+  <div class="card"><h3>{{ icon('council', 22, '', 'd') }}Opinions</h3><p class="muted">Only the judgement comes from AI: outlook, risks, the call. When they split, the page says so.</p></div>
 </div>
 
 <h2 class="sub">The council</h2>

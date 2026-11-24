@@ -7,8 +7,8 @@
   </select>
   <select name="o" aria-label="Above or below" class="op"><option value=">" {{ 'selected' if o == '>' }}>above</option><option value="<" {{ 'selected' if o == '<' }}>below</option></select>
   <span class="val">
-    <input class="num {{ 'hide' if is_m }}" type="number" step="any" inputmode="decimal" value="{{ '' if is_m or v == '' else '%g'|format(v) }}" aria-label="Value">
-    <select class="vs {{ 'on' if is_m }}" aria-label="Compare with">
+    <input class="numv {{ 'hide' if is_m }}" type="number" step="any" inputmode="decimal" value="{{ '' if is_m or v == '' else '%g'|format(v) }}" aria-label="Value">
+    <select class="vs {{ 'on' if is_m }}" aria-label="Compare with" data-empty-icon="sort">
       <option value="">a number</option>
       {% for key, m in metrics.items() %}<option value="@{{ key }}" {{ 'selected' if is_m and v == '@' ~ key }}>{{ m[0] }}</option>{% endfor %}
     </select>

@@ -3,14 +3,16 @@
   const list = document.getElementById('rulelist'), tpl = document.getElementById('ruletpl');
   document.getElementById('addrule')?.addEventListener('click', () => {
     list.insertAdjacentHTML('beforeend', tpl.innerHTML);
+    window.ui && window.ui.enhance(list.lastElementChild);
     list.lastElementChild.querySelector('input').focus();
   });
   // Each rule's value is a number or another measure ("@key"), kept in the hidden v field.
   function sync(rule) {
-    const num = rule.querySelector('.num'), vs = rule.querySelector('.vs'), hid = rule.querySelector('input[name=v]');
+    const num = rule.querySelector('.numv'), vs = rule.querySelector('select.vs'), hid = rule.querySelector('input[name=v]');
     if (!num) return;
     const measure = vs.value !== '';
     num.classList.toggle('hide', measure); vs.classList.toggle('on', measure);
+    const w = vs.closest('.sel'); if (w) w.classList.toggle('on', measure);
     num.required = !measure;
     hid.value = measure ? vs.value : num.value;
   }

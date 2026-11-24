@@ -14,6 +14,7 @@
       const open = [...live.querySelectorAll('details[open][id]')].map(d => d.id);
       live.innerHTML = next.innerHTML;
       open.forEach(id => { const d = document.getElementById(id); if (d) d.open = true; });
+      live.dispatchEvent(new Event('live:updated', {bubbles: true}));
       if (!next.dataset.poll) return;          // finished: final state shown, stop
     } catch (e) {}
     setTimeout(tick, 2500);

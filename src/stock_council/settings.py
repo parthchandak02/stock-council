@@ -5,12 +5,13 @@ import json
 
 from .config import DEFAULT_FILTERS
 from .council import COUNCIL, DEFAULT_PROMPT
+from .store import ensure_schema
 
 SCHEMA = "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated TEXT)"
 
 
 def get_settings(conn) -> dict:
-    conn.execute(SCHEMA)
+    ensure_schema(conn, "settings", SCHEMA)
     rows = {r["key"]: json.loads(r["value"]) for r in conn.execute("SELECT key, value FROM settings")}
     return {
         "filters": {**DEFAULT_FILTERS, **rows.get("filters", {})},
@@ -20,6 +21,6 @@ def get_settings(conn) -> dict:
 
 
 def save_setting(conn, key: str, value) -> None:
-    conn.execute(SCHEMA)
+    ensure_schema(conn, "settings", SCHEMA)
     conn.execute("INSERT OR REPLACE INTO settings VALUES (?,?,datetime('now'))", (key, json.dumps(value)))
     conn.commit()

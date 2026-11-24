@@ -28,13 +28,27 @@ CREATE TABLE IF NOT EXISTS cache (
 """
 
 
+_ready: set[str] = set()
+
+
 def connect() -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    # The site, the evening job and on-demand runs share one file: wait for a lock instead of failing.
+    conn = sqlite3.connect(DB_PATH, timeout=60)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.executescript(SCHEMA)
+    conn.execute("PRAGMA busy_timeout=60000")
+    ensure_schema(conn, "store", SCHEMA)
     return conn
+
+
+def ensure_schema(conn: sqlite3.Connection, name: str, sql: str) -> None:
+    """Run CREATE IF NOT EXISTS once per process: it takes a write lock, so not on every request."""
+    if name in _ready:
+        return
+    if name == "store":
+        conn.execute("PRAGMA journal_mode=WAL")
+    conn.executescript(sql)
+    _ready.add(name)
 
 
 def cache_get(conn: sqlite3.Connection, key: str, max_age_days: int = 0):

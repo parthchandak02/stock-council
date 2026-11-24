@@ -5,6 +5,7 @@
   stock-council sheet SYMBOL      print one fact sheet
   stock-council analyse SYMBOL    fact sheet + council for one stock (saved)
   stock-council daily [--no-email] the evening job: update, screen, council, email
+  stock-council retry RUN_ID      re-run the stocks of a run that failed
   stock-council email RUN_ID      (re)send the email for a run
   stock-council serve             the website on 127.0.0.1:8306
 """
@@ -43,6 +44,8 @@ def main() -> None:
     d.add_argument("--no-email", action="store_true")
     d.add_argument("--max", type=int, default=20)
     d.add_argument("--require-today", action="store_true", help="skip quietly if today's files are not out")
+    rt = sub.add_parser("retry", help="re-run failed stocks of a run")
+    rt.add_argument("run_id", type=int)
     e = sub.add_parser("email")
     e.add_argument("run_id", type=int)
     sv = sub.add_parser("serve")
@@ -74,6 +77,9 @@ def main() -> None:
         if not a.no_email and os.environ.get("SC_EMAIL_TO"):
             send_run_email(run_id)
             print("emailed")
+    elif a.cmd == "retry":
+        from .daily import retry_failed
+        print("retried", retry_failed(a.run_id))
     elif a.cmd == "email":
         send_run_email(a.run_id)
     elif a.cmd == "serve":

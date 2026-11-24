@@ -11,7 +11,7 @@ from .factsheet import build, render_markdown
 from .nse_api import NSE
 from .screen import run_screen
 from .settings import get_settings
-from .store import connect
+from .store import connect, ensure_schema
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS picks (
 
 def db():
     conn = connect()
-    conn.executescript(SCHEMA)
+    ensure_schema(conn, "daily", SCHEMA)
     return conn
 
 
@@ -119,3 +119,19 @@ def run_one(symbol: str) -> int:
     finally:
         conn.commit()
     return run_id
+
+
+def retry_failed(run_id: int) -> int:
+    """Re-run the council for stocks of a run that failed (network, lock, model outage)."""
+    conn = db()
+    st = get_settings(conn)
+    nse, n = NSE(), 0
+    for r in conn.execute("SELECT symbol FROM picks WHERE run_id=? AND error IS NOT NULL", (run_id,)).fetchall():
+        try:
+            res = analyse(conn, run_id, r["symbol"], st, nse)
+            conn.execute("UPDATE runs SET cost_usd=coalesce(cost_usd,0)+? WHERE id=?", (res["cost_usd"], run_id))
+            conn.commit()
+            n += 1
+        except Exception:
+            log.exception("%s failed again", r["symbol"])
+    return n

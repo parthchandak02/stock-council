@@ -40,5 +40,6 @@
 <div class="upd" id="upd" role="status" hidden>{{ icon('download', 16) }}<span>New version ready</span><button type="button" class="go" id="upd-go">Reload</button><button type="button" class="x" id="upd-x" aria-label="Later">{{ icon('x', 15) }}</button></div>
 <script src="/static/ui.js?v={{ BUILD }}"></script>
 <script src="/static/update.js?v={{ BUILD }}"></script>
+<script src="/static/prefetch.js?v={{ BUILD }}" defer></script>
 {% block scripts %}{% endblock %}
 </body></html>

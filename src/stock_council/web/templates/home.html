@@ -88,7 +88,7 @@
     <section class="panel">
       <form method="post" action="{{ B }}/screen" class="pb" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
         <div><b style="font-weight:600">Run the screen again</b><div class="muted small">about 5 min{% if show_costs() %} · about ${{ '%.2f'|format((avg_stock or 0.06) * 8) }}{% endif %}</div></div>
-        <button class="btn ghost">{{ icon('play', 15) }}Run now</button>
+        <button class="btn">{{ icon('play', 15) }}Run now</button>
       </form>
     </section>
   </div>

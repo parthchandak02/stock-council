@@ -255,12 +255,41 @@ def refresh(limit: int | None = None, max_age_days: int = 7, force: list[str] | 
 _pm_cache: dict = {}
 
 
+_pm_lock = __import__("threading").Lock()
+
+
 def price_metrics(conn) -> tuple[str, pd.DataFrame]:
-    """Cached per trading day: the heavy part (a year of NSE+BSE rows) is done once a day."""
+    """A year of prices boiled down to one row per company. Takes ~20 s, so it is built once per trading day
+    and kept three ways: in memory, on disk (survives restarts; shared with the evening job, which builds it
+    right after the day's prices land), and behind a lock (visitors wait for the one build in progress
+    instead of each starting their own)."""
+    from .config import DATA_DIR, MARKET
     latest = conn.execute("SELECT max(date) FROM daily").fetchone()[0]
-    if _pm_cache.get("day") != latest:
-        _pm_cache.update(day=latest, val=_price_metrics(conn))
-    return _pm_cache["val"]
+    if _pm_cache.get("day") == latest:
+        return _pm_cache["val"]
+    with _pm_lock:
+        if _pm_cache.get("day") == latest:
+            return _pm_cache["val"]
+        f = DATA_DIR / f"price-metrics-{MARKET['code']}-{latest}.pkl"
+        val = None
+        if f.exists():
+            try:
+                val = pd.read_pickle(f)
+            except Exception:
+                val = None
+        if val is None:
+            val = _price_metrics(conn)
+            try:
+                tmp = f.with_suffix(".tmp")
+                pd.to_pickle(val, tmp)
+                tmp.replace(f)                       # atomic: readers never see half a file
+                for old in DATA_DIR.glob(f"price-metrics-{MARKET['code']}-*.pkl"):
+                    if old != f:
+                        old.unlink(missing_ok=True)
+            except Exception as e:
+                log.warning("price metrics not saved to disk: %s", e)
+        _pm_cache.update(day=latest, val=val)
+        return val
 
 
 def _price_metrics(conn) -> tuple[str, pd.DataFrame]:

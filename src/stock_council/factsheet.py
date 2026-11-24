@@ -80,7 +80,9 @@ def build(symbol: str, nse: NSE | None = None) -> dict:
              "spike_x": round(tech["volume_1w_avg"] / max(tech["volume_1y_avg"], 1), 1)}
     sheet["fundamentals"] = get_fundamentals(conn, ident)
     if IS_US:
+        from .sec_financials import upgrade
         from .us_extras import extras
+        sheet["fundamentals"] = upgrade(sheet["fundamentals"], ident.get("cik"))   # official 10-K years
         sheet.update(extras(conn, ident, sheet["fundamentals"]))
     elif ident["nse_symbol"]:
         key = f"nse:{ident['nse_symbol']}"
@@ -143,7 +145,7 @@ def render_markdown(s: dict) -> str:
     f, t = s["fundamentals"], s["technicals"]
     L = [f"# {s['name']} ({s['nse_symbol'] or s['bse_symbol']}) — fact sheet as of {s['as_of']}",
          f"Price {C}{t['close']} ({_fmt(s['change_pct'], '%')} today) · Market cap {C}{_fmt(f.get('market_cap_cr'))} {U}",
-         "", f"## 1. Cash-flow quality ({C} {U}, financial years)",
+         "", f"## 1. Cash-flow quality ({C} {U}, financial years{', from ' + f['annual_source'] if f.get('annual_source') else ''})",
          "| FY end | Sales | Net profit | Depreciation | Operating CF | CFO/(NP+Dep) | Capex | Free CF |",
          "|---|---|---|---|---|---|---|---|"]
     for a in f["annual"][:4]:

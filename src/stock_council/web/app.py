@@ -30,6 +30,19 @@ HERE = Path(__file__).parent
 STATIC = HERE / "static"
 app = FastAPI(title="Stock Council", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=800)     # pages are mostly repeated markup: ~5x smaller
+
+
+@app.middleware("http")
+async def _cache_static(request: Request, call_next):
+    """CSS/JS/icons are fingerprinted with ?v=<build>, so browsers may keep them until the next deploy."""
+    resp = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        resp.headers["cache-control"] = ("public, max-age=31536000, immutable" if request.url.query
+                                         else "public, max-age=3600")
+    return resp
 tpl = Jinja2Templates(directory=HERE / "templates")
 tpl.env.filters["md"] = lambda s: markdown.markdown(s or "", extensions=["tables"])
 _C = MARKET["cur"]
@@ -108,6 +121,18 @@ def rules_qs(rules: list) -> str:
 tpl.env.globals.update(B=B, M=MARKET, IS_US=IS_US, BUILD=BUILD, show_costs=show_costs, funnel_steps=funnel_steps,
                        rules_qs=rules_qs)
 tpl.env.filters["usd"] = usd
+
+
+def mcap(x) -> str:
+    """Market cap in the market's unit: ₹ crore for India; $ M, B or T for the US."""
+    if x is None:
+        return "–"
+    if not IS_US:
+        return f"₹{x:,.0f} Cr"
+    return f"${x / 1e6:,.2f} T" if x >= 1e6 else f"${x / 1e3:,.1f} B" if x >= 1e3 else f"${x:,.0f} M"
+
+
+tpl.env.filters["mcap"] = mcap
 tpl.env.globals.update(group=lambda v: VOTE_GROUP.get(str(v or "").lower(), ""), short_name=short_name,
                        key_numbers=key_numbers,
                        FILTER_LABELS=FILTER_LABELS)
@@ -377,7 +402,11 @@ def history(request: Request):
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, saved: str = "", sent: str = ""):
     st = get_settings(db())
-    models_text = "\n".join(f"{m['name']} | {m['model']}" for m in st["models"])
+    from ..council import EFFORTS, catalogue
+    cat = catalogue()
+    known = {m["id"] for m in cat}
+    cat += [{"id": m["model"], "name": m["model"], "est": None, "reasoning": True, "json": True}
+            for m in st["council_all"] if m["model"] not in known]
     try:
         from ..mailer import address_status
         status = address_status()
@@ -387,11 +416,11 @@ def settings_page(request: Request, saved: str = "", sent: str = ""):
     from ..telemetry import backfill_from_picks, openrouter_key, summary as spend_summary
     backfill_from_picks()
     spend = spend_summary(30)
-    names = {m["model"]: m["name"] for m in st["models"]}
+    names = {m["model"]: m["name"] for m in st["council_all"]}
     for r in spend["by_model"]:
-        r["name"] = names.get(r["model"], "News search" if r["model"].startswith("deepseek") and r["model"] not in names else r["model"].split("/")[-1])
+        r["name"] = "News search" if r["model"] == "news" else names.get(r["model"], r["model"].split("/")[-1])
     return tpl.TemplateResponse(request, "settings.html", {
-        "st": st, "models_text": models_text, "saved": saved, "sent": sent, "nav": "settings",
+        "st": st, "catalogue": cat, "efforts": EFFORTS, "saved": saved, "sent": sent, "nav": "settings",
         "spend": spend, "key": openrouter_key(),
         "addr_status": status, "times": times,
         "daynames": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]})
@@ -412,13 +441,18 @@ async def save_settings(request: Request):
             filters[k] = default
     save_setting(conn, "filters", filters)
     save_setting(conn, "prompt", (form.get("prompt") or "").strip() or DEFAULT_PROMPT)
-    models = []
-    for line in (form.get("models") or "").splitlines():
-        if "|" in line:
-            name, model = (x.strip() for x in line.split("|", 1))
-            if name and "/" in model:
-                models.append({"name": name, "model": model})
-    save_setting(conn, "models", models or COUNCIL)
+    if "cm_model" in form:
+        models = []
+        for name, model, effort, on in zip(form.getlist("cm_name"), form.getlist("cm_model"), form.getlist("cm_effort"),
+                                           form.getlist("cm_on")):
+            model, name = model.strip(), (name.strip() or model.split("/")[-1])[:30]
+            if "/" in model:
+                models.append({"name": name, "model": model, "effort": effort or "default", "enabled": on == "1"})
+        if models:
+            save_setting(conn, "models", models)
+            save_setting(conn, "council_version", 2)
+        if form.get("thinking") in ("off", "low", "medium", "high"):
+            save_setting(conn, "thinking", form["thinking"])
     sent = []
     if "sched_time" in form:
         save_setting(conn, "schedule", {
@@ -439,6 +473,8 @@ async def save_settings(request: Request):
         save_setting(conn, "broker_to", ", ".join(x.strip() for x in form["broker_to"].replace("\n", ",").split(",") if x.strip()))
         save_setting(conn, "accounts", [x.strip() for x in (form.get("accounts") or "").replace(",", "\n").splitlines() if x.strip()])
         save_setting(conn, "gmail_account", (form.get("gmail_account") or "").strip())
+    if request.headers.get("x-autosave"):
+        return JSONResponse({"ok": True})
     from urllib.parse import quote
     return RedirectResponse(B + "/settings?saved=1" + (f"&sent={quote(', '.join(sent))}" if sent else ""), status_code=303)
 

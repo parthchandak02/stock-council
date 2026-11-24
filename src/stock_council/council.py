@@ -28,7 +28,11 @@ COUNCIL = [
     {"name": "Llama", "model": "meta-llama/llama-4-maverick"},
     {"name": "Qwen", "model": "qwen/qwen3.8-flash"},
     {"name": "Grok", "model": "x-ai/grok-4.7"},
+    {"name": "Mistral", "model": "mistralai/mistral-large-4-0", "effort": "low"},
+    {"name": "GLM", "model": "z-ai/glm-5.3"},
 ]
+ADDED_V2 = COUNCIL[-2:]          # added Nov 2026; merged once into councils saved before then
+EFFORTS = ["off", "low", "medium", "high"]   # how hard each model thinks before answering
 NEWS_MODEL = "deepseek/deepseek-v4.1-flash"
 NEWS_ENGINE = "parallel"
 
@@ -84,10 +88,11 @@ def _key() -> str:
 
 
 def _chat(model: str, messages: list[dict], *, json_mode=False, plugins=None, max_tokens=12000, timeout=300,
-          purpose: str = "", ctx: dict | None = None) -> dict:
+          purpose: str = "", ctx: dict | None = None, effort: str = "medium") -> dict:
     # Thinking models spend tokens before answering: room for both, and a medium thinking budget.
+    reasoning = {"enabled": False} if effort == "off" else {"effort": effort if effort in EFFORTS else "medium", "exclude": True}
     body = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.3,
-            "reasoning": {"effort": "medium", "exclude": True}, "usage": {"include": True}}
+            "reasoning": reasoning, "usage": {"include": True}}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     if plugins:
@@ -150,15 +155,16 @@ def ask_member(member: dict, prompt: str, sheet_md: str, news: str, ctx: dict | 
     t0 = time.time()
     msgs = [{"role": "system", "content": SYSTEM},
             {"role": "user", "content": f"{prompt}\n\n=== FACT SHEET ===\n{sheet_md}\n\n=== NEWS DIGEST ===\n{news}"}]
-    out = {"name": member["name"], "model": member["model"]}
+    out = {"name": member["name"], "model": member["model"], "effort": member.get("effort") or "medium"}
     try:
-        data = _chat(member["model"], msgs, json_mode=True, purpose=member["name"], ctx=ctx)
+        effort = member.get("effort") or "medium"
+        data = _chat(member["model"], msgs, json_mode=True, purpose=member["name"], ctx=ctx, effort=effort)
         content = data["choices"][0]["message"].get("content") or ""
         try:
             out.update(_parse(content))
         except (ValueError, json.JSONDecodeError):
             # one retry without JSON mode for models that ignore it
-            data = _chat(member["model"], msgs, purpose=member["name"] + " (retry)", ctx=ctx)
+            data = _chat(member["model"], msgs, purpose=member["name"] + " (retry)", ctx=ctx, effort=effort)
             out.update(_parse(data["choices"][0]["message"].get("content") or ""))
         u = data.get("usage") or {}
         out["cost"] = u.get("cost")
@@ -210,3 +216,33 @@ def run(sheet: dict, sheet_md: str, prompt: str = DEFAULT_PROMPT, members=COUNCI
     costs = [o.get("cost") or 0 for o in opinions] + [news.get("cost") or 0]
     return {"news": news, "opinions": opinions, "verdict": tally(opinions),
             "cost_usd": round(sum(costs), 4), "prompt": prompt}
+
+
+def catalogue() -> list[dict]:
+    """OpenRouter's model list (public, no key), for picking council members in Settings. Cached a day."""
+    from .store import cache_get, cache_put, connect
+    conn = connect()
+    hit = cache_get(conn, "openrouter:models", max_age_days=1)
+    if hit:
+        return hit
+    try:
+        data = httpx.get("https://openrouter.ai/api/v1/models", timeout=30).json()["data"]
+    except Exception:
+        return cache_get(conn, "openrouter:models", max_age_days=10_000) or []
+    out = []
+    for m in data:
+        p = m.get("pricing") or {}
+        try:
+            pin, pout = float(p.get("prompt") or 0) * 1e6, float(p.get("completion") or 0) * 1e6
+        except ValueError:
+            continue
+        sp = m.get("supported_parameters") or []
+        if pin < 0 or ":free" in m["id"] or "text" not in (m.get("architecture") or {}).get("output_modalities", ["text"]):
+            continue
+        # a council answer is ~2,500 tokens in and ~1,500 out (thinking included)
+        out.append({"id": m["id"], "name": m.get("name") or m["id"], "in": round(pin, 3), "out": round(pout, 3),
+                    "est": round((2500 * pin + 1500 * pout) / 1e6, 4), "reasoning": "reasoning" in sp,
+                    "json": "response_format" in sp, "created": m.get("created", 0)})
+    out.sort(key=lambda m: m["id"])
+    cache_put(conn, "openrouter:models", out)
+    return out

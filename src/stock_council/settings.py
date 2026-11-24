@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from .config import DEFAULT_FILTERS
-from .council import COUNCIL, DEFAULT_PROMPT
+from .council import ADDED_V2, COUNCIL, DEFAULT_PROMPT
 from .store import ensure_schema
 
 from .config import IS_US, MARKET
@@ -17,13 +17,30 @@ DEFAULT_TELEMETRY = {"show_costs": True}   # show what each AI call cost, on eve
 SCHEMA = "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated TEXT)"
 
 
+def _council(rows: dict) -> tuple[list[dict], list[dict], str]:
+    """(every member incl. switched-off ones, the members who vote, default thinking level)."""
+    thinking = rows.get("thinking") or "medium"
+    saved = rows.get("models") or [dict(m) for m in COUNCIL]
+    if rows.get("council_version", 1) < 2:      # saved before Mistral and GLM joined: add them once
+        have = {m["model"] for m in saved}
+        saved = saved + [dict(m) for m in ADDED_V2 if m["model"] not in have]
+    full = [{"name": m["name"], "model": m["model"], "effort": m.get("effort") or "default",
+             "enabled": m.get("enabled", True)} for m in saved]
+    voting = [{"name": m["name"], "model": m["model"], "effort": thinking if m["effort"] == "default" else m["effort"]}
+              for m in full if m["enabled"]]
+    return full, voting or [dict(m) for m in COUNCIL], thinking
+
+
 def get_settings(conn) -> dict:
     ensure_schema(conn, "settings", SCHEMA)
     rows = {r["key"]: json.loads(r["value"]) for r in conn.execute("SELECT key, value FROM settings")}
+    council_all, voting, thinking = _council(rows)
     return {
         "filters": {**DEFAULT_FILTERS, **rows.get("filters", {})},
         "prompt": rows.get("prompt") or DEFAULT_PROMPT,
-        "models": rows.get("models") or COUNCIL,
+        "models": voting,                 # the members who vote, each with its thinking level
+        "council_all": council_all,       # for Settings: every member, including ones switched off
+        "thinking": thinking,
         "screens": rows.get("screens") or [],
         # Broker orders by email (values live in the database, not in this public repo)
         "broker_to": rows.get("broker_to") or "",

@@ -520,3 +520,17 @@ select{font:inherit;font-weight:500;font-size:14px;color:var(--ink);background:v
 .sel select{background:none}
 .rule .val>select.vs{width:36px;flex:none;color:transparent;padding:8px 4px;background-image:none}
 .rule .val>select.vs.on{width:auto;flex:1;color:var(--ink)}
+/* settings: council members */
+.members{display:flex;flex-direction:column}
+.mrow{display:grid;grid-template-columns:40px 110px minmax(0,1fr) 110px 64px 28px;gap:8px;align-items:center;padding:8px 16px;border-top:1px solid var(--line)}
+.mrow .sel{width:100%}
+.mrow .mcost{font:12.5px var(--mono);color:var(--mute);text-align:right}
+.mrow .rm{background:transparent;color:var(--faint);padding:4px;border:0}
+.mrow:has(.mon:not(:checked)) :is(.mname,.sel,.mcost){opacity:.45}
+@media (max-width:640px){.mrow{grid-template-columns:40px minmax(0,1fr) 96px 28px;row-gap:6px} .mrow>.sel:nth-of-type(1){grid-column:1/-1;order:5} .mrow .mcost{display:none}}
+
+/* page changes cross-fade instead of blanking (browsers that support it; others just navigate) */
+@view-transition{navigation:auto}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.12s}
+.top{view-transition-name:topbar}
+@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}

@@ -31,9 +31,13 @@ def after_screen() -> dict:
     """Screener upkeep, after the email has gone: rolling fundamentals, ownership, saved screens."""
     from . import ownership, universe
     from .config import IS_US
+    from .daily import db
+    # the Screener's price data for the new day, built now so no visitor waits for it
+    ready = _step("screener prices", lambda: bool(universe.price_metrics(db())))
     if IS_US:
-        return {"fundamentals": _step("fundamentals", universe.refresh, limit=600)}
+        return {"screener_prices": ready, "fundamentals": _step("fundamentals", universe.refresh, limit=600)}
     return {
+        "screener_prices": ready,
         "fundamentals": _step("fundamentals", universe.refresh, limit=600),
         "ownership_bulk": _step("ownership bulk", ownership.refresh_bulk),
         "ownership_detail": _step("ownership detail", ownership.refresh_detail, limit=300),

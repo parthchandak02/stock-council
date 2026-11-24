@@ -2,8 +2,8 @@
 {% block title %}Settings · Stock Council{% endblock %}
 {% block main %}
 <form method="post" action="{{ B }}/settings" class="settings" style="display:flex;flex-direction:column;gap:inherit">
-<div class="pagehead"><div><h1>Settings</h1><p>{{ M.name }} · saved for everyone using the site</p></div>
-  <button class="btn">{{ icon('check', 15) }}Save</button></div>
+<div class="pagehead"><div><h1>Settings</h1><p>{{ M.name }} · changes save by themselves, for everyone</p></div>
+  <span class="chip good big" id="savestate" aria-live="polite">{{ icon('check', 14) }}Saved</span></div>
 {% if saved %}<div class="note good">{{ icon('check', 16) }}<span>Saved. The next run uses it.{% if sent %} A verify link went to <b>{{ sent }}</b>.{% endif %}</span></div>{% endif %}
 
 <div class="two even">
@@ -84,12 +84,6 @@
     <textarea name="prompt" rows="14" aria-label="Question for the council">{{ st.prompt }}</textarea>
   </details>
 
-  <details class="panel" id="members">
-    <summary class="ph"><h2>{{ icon('settings', 16) }}Council members</h2><span class="r">{{ st.models|length }} AIs {{ icon('chevdown', 14, 'tw') }}</span></summary>
-    <div class="pb" style="display:grid;gap:8px"><p class="faint small">One per line: <code>Name | OpenRouter model id</code></p>
-      <textarea name="models" rows="8" class="mono" style="font-family:var(--mono);font-size:13px">{{ models_text }}</textarea></div>
-  </details>
-
   {% if not IS_US %}
   <details class="panel" id="broker">
     <summary class="ph"><h2>{{ icon('mail', 16) }}Broker orders</h2><span class="r">{{ st.accounts|length }} accounts {{ icon('chevdown', 14, 'tw') }}</span></summary>
@@ -103,6 +97,40 @@
 </div>
 </div>
 
-<div class="savebar"><button class="btn ghost" name="reset" value="prompt">Restore original question</button><button class="btn">{{ icon('check', 15) }}Save</button></div>
+  {% set avg = {} %}{% for r in spend.by_model %}{% set _ = avg.update({r.model: r.avg_cost}) %}{% endfor %}
+  {% set est = {} %}{% for m in catalogue %}{% set _ = est.update({m.id: m.est}) %}{% endfor %}
+<section class="panel" id="members">
+    <div class="ph"><h2>{{ icon('council', 16) }}Council</h2><span class="r">{{ st.models|length }} voting</span></div>
+    <div class="set">
+      <label><span class="t"><b>Thinking level</b><span>For every AI set to "Default". More thinking: slower, a bit dearer</span></span>
+        <select name="thinking" aria-label="Default thinking level">{% for e in efforts %}<option value="{{ e }}" {{ 'selected' if st.thinking == e }}>{{ e|title }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="members" id="memberlist">
+      {% for m in st.council_all %}
+      <div class="mrow">
+        <input type="hidden" name="cm_on" value="{{ '1' if m.enabled }}{{ '0' if not m.enabled }}">
+        <input type="checkbox" class="switch mon" {{ 'checked' if m.enabled }} aria-label="{{ m.name }} votes">
+        <input name="cm_name" value="{{ m.name }}" aria-label="Name" class="mname">
+        <select name="cm_model" aria-label="Model"><option value="{{ m.model }}" selected>{{ m.model }}</option></select>
+        <select name="cm_effort" aria-label="Thinking">{% for e in ['default'] + efforts %}<option value="{{ e }}" {{ 'selected' if m.effort == e }}>{{ 'Default' if e == 'default' else e|title }}</option>{% endfor %}</select>
+        <span class="mcost" title="Average cost per answer, last 30 days (or the estimate from its price)">{{ (avg.get(m.model) or est.get(m.model))|usd if (avg.get(m.model) or est.get(m.model)) else '–' }}</span>
+        <button type="button" class="rm" aria-label="Remove {{ m.name }}">{{ icon('x', 15) }}</button>
+      </div>
+      {% endfor %}
+    </div>
+    <template id="catopts">{% for c in catalogue %}<option value="{{ c.id }}">{{ c.id }}{% if c.est %} · ~{{ c.est|usd }}{% endif %}</option>{% endfor %}</template>
+    <template id="membertpl"><div class="mrow">
+        <input type="hidden" name="cm_on" value="1"><input type="checkbox" class="switch mon" checked aria-label="Votes">
+        <input name="cm_name" value="" placeholder="Name" aria-label="Name" class="mname">
+        <select name="cm_model" aria-label="Model"><option value="">Pick a model</option></select>
+        <select name="cm_effort" aria-label="Thinking">{% for e in ['default'] + efforts %}<option value="{{ e }}">{{ 'Default' if e == 'default' else e|title }}</option>{% endfor %}</select>
+        <span class="mcost">new</span>
+        <button type="button" class="rm" aria-label="Remove">{{ icon('x', 15) }}</button></div></template>
+    <div class="panel-foot"><button type="button" class="btn ghost" id="addmember">{{ icon('plus', 15) }}Add a model</button>
+      <span class="faint small">Switch off to pause a model without losing it. Cost is per stock.</span></div>
+  </section>
+
+<div class="savebar"><button class="btn ghost" name="reset" value="prompt">Restore original question</button><noscript><button class="btn">Save</button></noscript></div>
 </form>
 {% endblock %}
+{% block scripts %}<script src="/static/settings.js?v={{ BUILD }}"></script>{% endblock %}

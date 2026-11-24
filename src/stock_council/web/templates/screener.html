@@ -12,11 +12,11 @@
     <div class="ph"><h2>{{ icon('filter', 16) }}Screens</h2></div>
     <div class="scrlist">
       {% for p in presets %}{% set key = 'preset:' ~ p.id %}
-      <a class="scr {{ 'on' if active.key == key }}" href="{{ B }}/screener?preset={{ p.id }}"><b>{{ p.name }}{% if key in edited_keys %}<i class="edot" title="Edited"></i>{% endif %}</b><span>{{ p.desc }}</span></a>
+      <a data-noprefetch class="scr {{ 'on' if active.key == key }}" href="{{ B }}/screener?preset={{ p.id }}"><b>{{ p.name }}{% if key in edited_keys %}<i class="edot" title="Edited"></i>{% endif %}</b><span>{{ p.desc }}</span></a>
       {% endfor %}
       {% if saved %}<div class="scrhead">Your screens</div>{% endif %}
       {% for x in saved %}{% set key = 's:' ~ x.id %}
-      <a class="scr {{ 'on' if active.key == key }}" href="{{ B }}/screener?s={{ x.id }}"><b>{{ x.name }}{% if key in edited_keys %}<i class="edot" title="Edited"></i>{% endif %}</b>
+      <a data-noprefetch class="scr {{ 'on' if active.key == key }}" href="{{ B }}/screener?s={{ x.id }}"><b>{{ x.name }}{% if key in edited_keys %}<i class="edot" title="Edited"></i>{% endif %}</b>
         <span>{% if x.last %}{{ x.last.count }} last night{% if x.last.new %} · {{ x.last.new|length }} new{% endif %}{% elif x.daily %}checked every evening{% else %}saved{% endif %}</span></a>
       {% endfor %}
     </div>

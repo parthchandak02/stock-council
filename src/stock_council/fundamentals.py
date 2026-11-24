@@ -89,7 +89,7 @@ def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = Fal
             "fy_end": y, "sales": _r(r), "net_profit": _r(p), "depreciation": _r(d),
             "operating_cash_flow": _r(c), "capex": _r(cx),
             "free_cash_flow": _r(c + cx) if c is not None and cx is not None else None,
-            "cfo_to_profit_plus_dep_pct": _div(c, base, 100),
+            "cfo_to_profit_plus_dep_pct": _div(c, base, 100) if base and base > 0 else None,   # meaningless on a loss
             "debt_to_equity": _div(at(debt, i), at(eq, i)),
             "inventory_days": _div(at(inv, i), cost, 365),
             "receivable_days": _div(at(recv, i), r, 365),

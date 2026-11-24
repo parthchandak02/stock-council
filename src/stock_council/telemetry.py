@@ -52,9 +52,9 @@ def summary(days: int = 30) -> dict:
     conn = db()
     since = f"-{days} days"
     by_model = [dict(r) for r in conn.execute(
-        "SELECT model, count(*) calls, sum(ok=0) failed, sum(prompt_tokens) tin, sum(completion_tokens) tout, "
+        "SELECT CASE WHEN purpose='news' THEN 'news' ELSE model END model, count(*) calls, sum(ok=0) failed, sum(prompt_tokens) tin, sum(completion_tokens) tout, "
         "sum(reasoning_tokens) treason, round(sum(cost), 4) cost, round(avg(cost), 5) avg_cost, round(avg(seconds), 1) avg_s "
-        "FROM ai_calls WHERE at >= datetime('now', ?) GROUP BY model ORDER BY cost DESC", (since,))]
+        "FROM ai_calls WHERE at >= datetime('now', ?) GROUP BY 1 ORDER BY cost DESC", (since,))]
     total = sum(r["cost"] or 0 for r in by_model)
     one = lambda q, *a: conn.execute(q, a).fetchone()[0] or 0
     month = one("SELECT sum(cost) FROM ai_calls WHERE at >= strftime('%Y-%m-01','now')")

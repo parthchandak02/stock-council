@@ -28,7 +28,22 @@
     btn.innerHTML = label;   // editing after opening a draft: offer a fresh one
     box.classList.toggle('selling', s.side === 'sell');
   }
-  for (let i = 0; i < 3; i++) addLine();
+  // a half-filled order is kept on this device until it is sent to Gmail
+  const KEY = 'order:' + d.isin;
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+  if (draft && draft.rows && draft.rows.length) {
+    draft.rows.forEach(r => addLine(r.qty, r.price));
+    const side = box.querySelector(`input[name=side][value=${draft.side}]`); if (side) side.checked = true;
+    const acct = box.querySelector('select[name=account]');
+    if (acct && [...acct.options].some(o => o.value === draft.account)) { acct.value = draft.account; acct.dispatchEvent(new Event('change')); }
+    for (let i = draft.rows.length; i < 3; i++) addLine();
+  } else for (let i = 0; i < 3; i++) addLine();
+  function keep() {
+    const s = state();
+    try { s.rows.length ? localStorage.setItem(KEY, JSON.stringify({side: s.side, account: s.account, rows: s.rows})) : localStorage.removeItem(KEY); } catch (e) {}
+  }
+  box.addEventListener('input', keep); box.addEventListener('change', keep);
   box.addEventListener('input', render); box.addEventListener('change', render);
   box.querySelector('.addline').addEventListener('click', () => { addLine(); render(); lines.lastElementChild.querySelector('.q').focus(); });
   lines.addEventListener('click', e => { if (e.target.closest('.rm')) { e.target.closest('.line').remove(); render(); } });
@@ -43,5 +58,6 @@
       body: JSON.stringify({run_id: +d.run, isin: d.isin, symbol: d.symbol, name: d.name, side: s.side,
                             account: s.account, lines: s.rows, subject: s.subject})});
     btn.innerHTML = 'Draft opened in Gmail ✓';
+    try { localStorage.removeItem(KEY); } catch (e) {}
   });
 })();

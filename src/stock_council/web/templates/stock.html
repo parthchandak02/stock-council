@@ -10,7 +10,7 @@
   <div class="hdr">
     <div>
       <h1>{{ (p.name or p.symbol)|nice }}</h1>
-      <div class="meta"><span>{{ M.id_label }}: {{ p.symbol }}</span>{% if s.bse_code %}<span>BSE {{ s.bse_code }}</span>{% endif %}{% if f.sector %}<span>{{ f.sector }}</span>{% endif %}{% if f.market_cap_cr %}<span>{{ M.cur }}{{ '{:,.0f}'.format(f.market_cap_cr) }} {{ M.unit_label }}</span>{% endif %}<span>{{ run.day|day }}</span></div>
+      <div class="meta"><span>{{ M.id_label }}: {{ p.symbol }}</span>{% if s.bse_code %}<span>BSE {{ s.bse_code }}</span>{% endif %}{% if f.sector %}<span>{{ f.sector }}</span>{% endif %}{% if f.market_cap_cr %}<span>{{ f.market_cap_cr|mcap }}</span>{% endif %}<span>{{ run.day|day }}</span></div>
       <div class="price"><b>{{ p.price|inr }}</b>{{ change(s.change_pct) }}</div>
     </div>
     <div class="verdict {{ k }}">
@@ -65,6 +65,34 @@
       <div class="ph hd-top"><h2>{{ icon('council', 16) }}Who owns it</h2>
         <div class="seg" role="tablist"><button type="button" data-view="chart" class="on">Graph</button><button type="button" data-view="table">Table</button></div></div>
       <div class="hd-body"><p class="muted small">{{ icon('spin', 14, 'spin') }} Reading 12 quarters of shareholding filings…</p></div>
+    </section>
+    {% endif %}
+
+    {% if IS_US and p.status == 'done' %}{% set o = s.owners_us or {} %}{% set ins = s.insiders or {} %}
+    <section class="panel">
+      <div class="ph"><h2>{{ icon('council', 16) }}Who owns it</h2><span class="r">SEC filings · Yahoo</span></div>
+      <div class="pb">
+        {% set ip = o.insiders_pct or 0 %}{% set inst = o.institutions_pct or 0 %}{% set rest = [100 - ip - inst, 0]|max %}
+        {% if o.insiders_pct is not none or o.institutions_pct is not none %}
+        <div class="now">
+          {% for label, v, c in [('Insiders', ip, '--c-prom'), ('Institutions', inst, '--c-fii'), ('Everyone else', rest, '--c-pure')] if v > 0 %}
+          <div style="flex:{{ v }};background:var({{ c }})" title="{{ label }} {{ '%.1f'|format(v) }}%">{{ '%.1f'|format(v) if v >= 8 }}</div>{% endfor %}
+        </div>
+        <div class="legend-row">{% for label, v, c in [('Insiders', ip, '--c-prom'), ('Institutions', inst, '--c-fii'), ('Everyone else', rest, '--c-pure')] %}<span><i class="sw" style="background:var({{ c }})"></i>{{ label }} <b class="mono" style="font-weight:500;color:var(--ink)">{{ '%.1f'|format(v) }}%</b></span>{% endfor %}
+          {% if o.short_pct_float is not none %}<span>Short interest <b class="mono" style="font-weight:500;color:var(--ink)">{{ o.short_pct_float }}%</b>{% if o.short_ratio_days %} · {{ o.short_ratio_days }} days to cover{% endif %}</span>{% endif %}</div>
+        {% else %}<p class="muted small">No ownership split published for this company.</p>{% endif %}
+      </div>
+      <div class="grid c3 stats">
+        <div><div class="lab"><span>Insider buys, 90 days</span></div><div class="val good">${{ '{:,.1f}'.format((ins.buys_usd or 0) / 1e6) }}<small>M · {{ ins.buyers or 0 }} people</small></div></div>
+        <div><div class="lab"><span>Insider sells, 90 days</span></div><div class="val {{ 'bad' if ins.sells_usd }}">${{ '{:,.1f}'.format((ins.sells_usd or 0) / 1e6) }}<small>M · {{ ins.sellers or 0 }} people</small></div></div>
+        <div><div class="lab"><span>Net</span></div><div class="val {{ 'good' if (ins.net_usd or 0) > 0 else 'bad' if (ins.net_usd or 0) < 0 }}">{{ '+' if (ins.net_usd or 0) > 0 else '−' if (ins.net_usd or 0) < 0 }}${{ '{:,.1f}'.format(((ins.net_usd or 0)|abs) / 1e6) }}<small>M</small></div></div>
+      </div>
+      {% if ins.trades %}
+      <details class="peek"><summary>{{ icon('history', 14) }}Insider trades · {{ ins.trades|length }}{{ icon('chevdown', 14, 'tw') }}</summary>
+        <div class="tblwrap" style="padding:0"><table class="tbl"><tr><th>Insider</th><th>Date</th><th>Role</th><th>Type</th><th>Shares</th><th>Price</th></tr>
+        {% for x in ins.trades %}<tr><td>{{ x.who }}</td><td>{{ x.date }}</td><td>{{ x.role or '–' }}</td><td class="{{ 'neg' if x.type == 'Sell' else 'pos' }}">{{ x.type }}</td><td>{{ '{:,}'.format(x.shares) }}</td><td>${{ x.price }}</td></tr>{% endfor %}
+        </table></div></details>
+      {% endif %}
     </section>
     {% endif %}
 

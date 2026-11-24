@@ -70,9 +70,10 @@ def _key() -> str:
     return k
 
 
-def _chat(model: str, messages: list[dict], *, json_mode=False, plugins=None, max_tokens=4000, timeout=240) -> dict:
+def _chat(model: str, messages: list[dict], *, json_mode=False, plugins=None, max_tokens=12000, timeout=300) -> dict:
+    # Thinking models spend tokens before answering: room for both, and a medium thinking budget.
     body = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.3,
-            "usage": {"include": True}}
+            "reasoning": {"effort": "medium", "exclude": True}, "usage": {"include": True}}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     if plugins:

@@ -50,6 +50,6 @@
 
 <section class="panel">
   <div class="ph"><h2>{{ icon('council', 16) }}The council</h2>{% if show_costs() %}<span class="r">about {{ (avg_stock or 0.06)|usd }} per stock</span>{% endif %}</div>
-  <div class="grid c7">{% for m in st.models %}<div><b style="font-weight:600;font-size:14px">{{ m.name }}</b><span class="faint mono" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.model.split('/')[-1] }}</span></div>{% endfor %}</div>
+  <div class="grid c7">{% for m in st.models %}<div><b style="font-weight:600;font-size:14px">{{ m.name }}</b><span class="faint mono" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.model.split('/')[-1] }}</span></div>{% endfor %}</div>
 </section>
 {% endblock %}

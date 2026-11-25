@@ -57,7 +57,7 @@
     <div class="pb"><div class="spendbar" aria-label="Spend per day">{% for d in spend.days %}<i style="height:{{ [(d.cost or 0) / dmax * 100, 3]|max }}%" title="{{ d.day }}: {{ d.cost|usd }} · {{ d.calls }} calls"></i>{% endfor %}</div>
       <div class="gl" style="margin-top:4px"><span>{{ spend.days[0].day[5:] }}</span><span>{{ spend.days[-1].day[5:] }}</span></div></div>{% endif %}
     <div class="rows">
-      <div class="spendrow" style="padding-block:7px"><span class="faint" style="text-align:left;font-family:var(--sans);font-size:12px">Model</span><span class="faint" style="font-size:11.5px">Calls</span><span class="faint" style="font-size:11.5px">Avg / call</span><span class="faint" style="font-size:11.5px">Total</span></div>
+      <div class="spendrow" style="padding-block:7px"><span class="faint" style="text-align:left;font-family:var(--sans);font-size:12px">Model</span><span class="faint" style="font-size:12px">Calls</span><span class="faint" style="font-size:12px">Avg / call</span><span class="faint" style="font-size:12px">Total</span></div>
       {% for r in spend.by_model %}
       <div class="spendrow"><span class="nm"><b>{{ r.name }}</b><span>{{ r.model }}{% if r.tin %} · {{ '{:,}'.format(((r.tin or 0) / r.calls)|int) }} in / {{ '{:,}'.format(((r.tout or 0) / r.calls)|int) }} out{% endif %}{% if r.failed %} · {{ r.failed }} failed{% endif %}</span></span>
         <span>{{ r.calls }}</span><span>{{ r.avg_cost|usd }}</span><span class="c">{{ r.cost|usd }}</span></div>

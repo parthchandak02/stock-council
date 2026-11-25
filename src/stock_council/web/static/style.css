@@ -56,7 +56,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 14px 28px;display:flex;flex-dir
   .brand .name{display:none}
   .tabs{position:fixed;left:0;right:0;bottom:0;margin:0;justify-content:space-around;gap:0;z-index:20;
     padding:6px 4px calc(6px + env(safe-area-inset-bottom));background:var(--surf);border-top:1px solid var(--line)}
-  .tabs a{flex-direction:column;gap:2px;font-size:10.5px;padding:5px 6px;background:none!important;min-width:56px}
+  .tabs a{flex-direction:column;gap:2px;font-size:12px;padding:5px 6px;background:none!important;min-width:56px}
   .tabs .long{display:none} .tabs .short{display:inline}
 }
 
@@ -113,7 +113,7 @@ details.panel:not([open])>summary{border-bottom:0}
 .gauge i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;min-width:3px}
 .gauge u{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--ink);opacity:.6}
 .gauge b{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--buy) 22%,transparent)}
-.gl{display:flex;justify-content:space-between;gap:6px;font:10.5px var(--mono);color:var(--faint)}
+.gl{display:flex;justify-content:space-between;gap:6px;font:12px var(--mono);color:var(--faint)}
 .bg-good{background:var(--buy)} .bg-warn{background:var(--hold)} .bg-bad{background:var(--sell)} .bg-na{background:var(--line2)} .bg-split{background:var(--split)} .bg-focus{background:var(--focus)}
 
 /* chips */
@@ -146,7 +146,7 @@ details.panel:not([open])>summary{border-bottom:0}
 .chev{color:var(--faint)}
 .pick{grid-template-columns:minmax(0,1fr) auto auto 76px 16px}
 .score{display:flex;flex-direction:column;gap:4px;width:76px}
-.score b{font:500 16px var(--mono);text-align:right} .score b small{font-size:11px;color:var(--faint)}
+.score b{font:500 16px var(--mono);text-align:right} .score b small{font-size:12px;color:var(--faint)}
 @media (max-width:540px){
   .pick{grid-template-columns:minmax(0,1fr) auto 16px;row-gap:6px}
   .pick .votes{grid-column:1;grid-row:2} .pick .chip{grid-column:2;grid-row:1} .pick .score{grid-column:2;grid-row:2;width:58px} .pick .chev{grid-row:1/3;grid-column:3}
@@ -231,15 +231,15 @@ input[type=checkbox].switch:checked{background:var(--buy)} input[type=checkbox].
 .stages .now .bar i{background:var(--focus)}
 .stages .fail .bar i{background:var(--sell);width:100%}
 .stages b{font-size:13px;font-weight:600} .stages .todo b{color:var(--faint)}
-.stages span{font:11.5px var(--mono);color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@media (max-width:540px){.stages>*{padding:10px 6px} .stages b{font-size:11.5px}}
+.stages span{font:12px var(--mono);color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:540px){.stages>*{padding:10px 6px} .stages b{font-size:12px}}
 .slots{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
-.slots>*{border:1px solid var(--line);border-radius:7px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:11px;color:var(--mute);min-width:0}
+.slots>*{border:1px solid var(--line);border-radius:7px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:12px;color:var(--mute);min-width:0}
 .slots b{font:500 13px var(--mono);color:var(--ink)}
 .slots .wait{border-style:dashed}
 .slots .buy b{color:var(--buy)} .slots .hold b{color:var(--hold)} .slots .sell b{color:var(--sell)} .slots .err b{color:var(--faint)}
 .slots span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media (max-width:540px){.slots span{font-size:9.5px}}
+@media (max-width:540px){.slots span{font-size:12px}}
 .peeks{display:flex;flex-direction:column}
 .peek{border-top:1px solid var(--line)}
 .peek>summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;font-weight:500;font-size:13.5px;color:var(--mute);padding:9px 16px}
@@ -297,7 +297,7 @@ details.ai>summary{padding:10px 16px} details.ai>summary:hover{background:var(--
 .ai-body ol{margin:6px 0 0;padding-left:18px} .ai-body li{margin:4px 0}
 .ai-body .muted{font-size:12.5px;font-family:var(--mono)}
 .pricechart .pb>svg{width:100%;height:auto;display:block}
-.pricechart .pb>svg text{font:10.5px var(--mono);fill:var(--faint)}
+.pricechart .pb>svg text{font:12px var(--mono);fill:var(--faint)}
 
 /* broker order */
 .order .pb{display:flex;flex-direction:column;gap:12px}
@@ -325,9 +325,9 @@ details.ai>summary{padding:10px 16px} details.ai>summary:hover{background:var(--
 .tbl th,.tbl td{padding:8px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
 .tbl td{font-family:var(--mono);font-size:13px}
 .tbl tr:last-child td{border-bottom:0}
-.tbl th{font-size:11.5px;color:var(--mute);font-weight:500;background:var(--raise)}
+.tbl th{font-size:12px;color:var(--mute);font-weight:500;background:var(--raise)}
 .tbl td:first-child,.tbl th:first-child{text-align:left;position:sticky;left:0;background:var(--surf);font-family:var(--sans);font-size:13.5px}
-.tbl th:first-child{background:var(--raise);font-size:11.5px}
+.tbl th:first-child{background:var(--raise);font-size:12px}
 .tbl tr.hl td{font-weight:600}
 .tbl tr.me td{background:color-mix(in srgb,var(--focus) 9%,var(--surf))}
 .tbl td.neg{color:var(--sell)} .tbl td.pos{color:var(--buy)}
@@ -355,17 +355,17 @@ details.ai>summary{padding:10px 16px} details.ai>summary:hover{background:var(--
 /* who owns it (holdings.js) */
 .holdings .hd-body{padding:14px 16px}
 .now{display:flex;height:28px;border-radius:6px;overflow:hidden;gap:2px}
-.now div{display:flex;align-items:center;justify-content:center;font:600 11px var(--mono);color:var(--on-accent);min-width:0;overflow:hidden;white-space:nowrap}
+.now div{display:flex;align-items:center;justify-content:center;font:600 12px var(--mono);color:var(--on-accent);min-width:0;overflow:hidden;white-space:nowrap}
 .hc-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:14px 0 8px}
 .legend{display:flex;flex-wrap:wrap;gap:4px}
 .lg{background:transparent;color:var(--ink);border:1px solid var(--line);padding:3px 9px;border-radius:6px;font-size:12.5px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
 .lg i{width:8px;height:8px;border-radius:2px;display:inline-block} .lg.off{opacity:.4} .lg:disabled{cursor:default}
 .hc-wrap{position:relative} .hchart{width:100%;height:auto;display:block;touch-action:pan-y}
-.hchart .grid{stroke:var(--line);stroke-width:1} .hchart .ax{fill:var(--faint);font:10.5px var(--mono)}
+.hchart .grid{stroke:var(--line);stroke-width:1} .hchart .ax{fill:var(--faint);font:12px var(--mono)}
 .hchart .ln{fill:none;stroke-width:1.8;stroke-linejoin:round} .hchart .ln.pure{stroke-width:2.4}
 .hchart .area{opacity:.92;stroke:var(--surf);stroke-width:.6}
 .hchart .hover{stroke:var(--ink);stroke-dasharray:3 3;opacity:.5}
-.hchart .endl{font:500 10.5px var(--mono)}
+.hchart .endl{font:500 12px var(--mono)}
 .tip{position:absolute;top:6px;min-width:170px;background:var(--surf);border:1px solid var(--line2);border-radius:9px;padding:8px 10px;
   box-shadow:var(--pop);font-size:12.5px;display:grid;gap:3px;pointer-events:none}
 .tip[hidden]{display:none}
@@ -402,7 +402,7 @@ details.ai>summary{padding:10px 16px} details.ai>summary:hover{background:var(--
 .results td:nth-child(2),.results th:nth-child(2){text-align:left;position:sticky;left:0;background:var(--surf);max-width:220px;white-space:normal;min-width:150px;font-family:var(--sans)}
 .results th:nth-child(2){background:var(--raise)}
 .results td:first-child,.results th:first-child{position:static;background:transparent}
-.results td b{display:block;line-height:1.25;font-weight:600} .results .sym{display:block;font:11.5px var(--mono)}
+.results td b{display:block;line-height:1.25;font-weight:600} .results .sym{display:block;font:12px var(--mono)}
 .results .ck{width:40px;text-align:center}
 .spikebar{display:flex;align-items:center;gap:8px;justify-content:flex-end}
 .spikebar .gauge{width:48px;margin:0}
@@ -536,3 +536,18 @@ select{font:inherit;font-weight:500;font-size:14px;color:var(--ink);background:v
 @media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}
 /* rows that scroll sideways keep a little room, so borders and focus rings are never cut off */
 .presets{padding:2px}
+
+/* phone: everything tappable is at least 44 px tall (or wide), or 24 px with room around it */
+@media (max-width:719px){
+  .back{min-height:44px;align-items:center}
+  .rule .rm,.mrow .rm,.line .rm{min-width:40px;min-height:44px;display:inline-grid;place-items:center}
+  .results input[type=checkbox]{width:24px;height:24px}
+  .results .ck{width:48px}
+  input[type=checkbox].switch{width:48px;height:28px}
+  input[type=checkbox].switch::after{width:22px;height:22px}
+  input[type=checkbox].switch:checked::after{left:23px;width:22px;height:22px}
+  .mkt a{min-height:36px}
+  .brand{min-height:44px;min-width:44px;justify-content:center}
+  .anns a{display:inline-block;padding:10px 0}
+  .ph .r .btn,.acts .btn{min-height:40px}
+}

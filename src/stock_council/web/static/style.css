@@ -644,3 +644,4 @@ i.ln[style*="background"]{height:2px;border:0}
 @media (prefers-reduced-motion:no-preference){.dbar i{animation:fadein .5s ease-out both}}
 .pc-tip[hidden],.fin-tip[hidden]{display:none}
 .pc-tip{min-width:250px} .pc-tip b{flex:none} .pc-tip>div:not(.pc-tip-h){align-items:baseline}
+.pc-foot a{display:inline-block;padding:6px 2px;margin:-6px 0}

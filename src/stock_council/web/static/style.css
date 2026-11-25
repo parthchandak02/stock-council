@@ -736,3 +736,4 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 .tl.compact .tl-lab{align-self:center;display:flex;align-items:center}
 .tl.compact .tl-lab.last{justify-self:start;text-align:left;justify-content:flex-start}
 .tl.compact .tl-lab.next{justify-self:end;text-align:right;justify-content:flex-end}
+.tl.compact .tl-lab{min-height:24px;line-height:1.2}

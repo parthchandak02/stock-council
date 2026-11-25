@@ -22,6 +22,19 @@
   </form>
 </div>
 
+{% if tl %}
+<section class="panel tl" id="tl" data-iana="{{ M.tz }}" data-last="{{ tl.last or '' }}" data-next="{{ tl.next or '' }}" data-close="{{ tl.close or '' }}"
+  data-picks="{{ (tl.last_picks ~ ' pick' ~ ('s' if tl.last_picks != 1 else '')) if tl.last_status == 'done' else (tl.last_status or '') }}" aria-label="Screen timeline">
+  <div class="tl-labs">
+    {% if tl.last %}<a class="tl-lab last" href="{{ B }}/run/{{ tl.last_run }}"><b>Last run</b><span></span></a>{% else %}<span class="tl-lab last"><b>Last run</b><span>none yet</span></span>{% endif %}
+    <span class="tl-lab next"><b>Next run</b><span>{{ tl.why or '' }}</span></span>
+  </div>
+  <div class="tl-track"><i class="tl-fill"></i><i class="tl-tick" style="left:0"></i><i class="tl-close" hidden></i><i class="tl-now"></i><i class="tl-tick" style="left:100%"></i></div>
+  <div class="tl-nowrow"><span class="tl-lab now"><b>Now</b> <span></span></span></div>
+  <div class="tl-foot faint">{{ tl.tz }} time{% if tl.holiday_today %} · market holiday today{% endif %}{% if tl.close %}<span class="tl-closekey"> · <i class="tl-key"></i> market close</span>{% endif %}</div>
+</section>
+{% endif %}
+
 {% if run %}
 {% set fn = run.funnel or {} %}
 {% set total = fn.companies or 1 %}
@@ -98,4 +111,4 @@
   </div>
 </div>
 {% endblock %}
-{% block scripts %}{% if running %}<script>setTimeout(() => location.reload(), 15000)</script>{% endif %}{% endblock %}
+{% block scripts %}<script src="/static/timeline.js?v={{ BUILD }}"></script>{% if running %}<script>setTimeout(() => location.reload(), 15000)</script>{% endif %}{% endblock %}

@@ -61,6 +61,7 @@
     <form method="post" action="{{ B }}/screener/reset" id="resetform" hidden><input type="hidden" name="key" value="{{ active.key }}"></form>
     {% if active.kind == 'saved' %}<form method="post" action="{{ B }}/screener/delete" id="delform" hidden><input type="hidden" name="sid" value="{{ active.id }}"></form>{% endif %}
 
+    {% if res and res.skipped %}<div class="note bad">{{ icon('alert', 16) }}<span>Skipped {{ res.skipped|join(', ') }}: that data didn't load today, so those rules weren't applied.</span></div>{% endif %}
     {% if res %}
     <form method="post" action="{{ B }}/council" id="pickform" class="panel">
       <div class="ph"><h2>{{ res.hits|length }} match{{ 'es' if res.hits|length != 1 }}</h2>
@@ -83,7 +84,7 @@
       <div class="panel-foot"><span class="muted small">Tick up to 10, then Ask the council{% if show_costs() %} (about {{ (avg_stock or 0.06)|usd }} each){% endif %}.</span></div>
       {% else %}<div class="empty small muted">Nothing matches every rule. Try loosening one.</div>{% endif %}
     </form>
-    <p class="faint small">Fundamentals: {{ res.fund_count|num }} companies, refreshed on a rolling weekly cycle (newest {{ res.fund_updated|day }}). Prices, volume{{ '' if IS_US else ' and delivery' }}: every trading evening.</p>
+    <p class="faint small">Fundamentals: {{ res.fund_count|num }} companies, refreshed on a rolling weekly cycle (newest {{ res.fund_updated|day }}). Prices, volume{{ '' if IS_US else ' and delivery' }}: every trading evening.{% if IS_US %} Yearly figures from SEC 10-K filings where available.{% endif %}</p>
     {% endif %}
   </div>
 </div>

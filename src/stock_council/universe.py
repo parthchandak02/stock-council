@@ -228,6 +228,11 @@ def refresh(limit: int | None = None, max_age_days: int = 7, force: list[str] | 
             try:
                 f = fundamentals.fetch(c["yahoo"], with_sector=True)
                 empties = 0
+                if IS_US:   # official yearly numbers from 10-K filings replace Yahoo's where the SEC has them
+                    row = conn.execute("SELECT cik FROM us_symbols WHERE ticker=?", (c["isin"],)).fetchone()
+                    if row and row["cik"]:
+                        from .sec_financials import upgrade
+                        f = upgrade(f, row["cik"])
                 break
             except LookupError as e:
                 err = str(e)[:200]
@@ -373,8 +378,10 @@ def run_rules(rules: list, conn=None, limit: int = 200) -> dict:
     today, df = table(conn)
     total = len(df)
     mask = pd.Series(True, index=df.index)
+    skipped = []
     for key, op, val in rules:
         if key not in df.columns:
+            skipped.append(METRICS.get(key, (key,))[0])   # its data didn't load: say so, never filter silently
             continue
         col = df[key]
         if isinstance(val, str) and val.startswith("@") and val[1:] in df.columns:
@@ -392,7 +399,7 @@ def run_rules(rules: list, conn=None, limit: int = 200) -> dict:
         hits = hits.sort_values(sort_key, ascending=False)
     hits = hits.head(limit)
     newest = conn.execute("SELECT max(updated), min(updated), count(*) FROM universe").fetchone()
-    return {"day": today, "universe": total, "hits": hits.reset_index().to_dict("records"),
+    return {"day": today, "universe": total, "hits": hits.reset_index().to_dict("records"), "skipped": skipped,
             "fund_updated": newest[0], "fund_oldest": newest[1], "fund_count": newest[2]}
 
 

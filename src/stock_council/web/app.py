@@ -319,7 +319,16 @@ def home(request: Request):
         "WHERE r.kind='on_demand' ORDER BY r.id DESC LIMIT 6")]
     return tpl.TemplateResponse(request, "home.html", {
         "run": run, "picks": _picks(conn, run["id"]) if run else [], "running": _running(conn),
-        "checks": checks, "nav": "today", "track": _track_buys(conn), "avg_stock": _avg_stock(), "sparks": _sparks(conn)})
+        "checks": checks, "nav": "today", "track": _track_buys(conn), "avg_stock": _avg_stock(), "sparks": _sparks(conn),
+        "tl": _timeline(conn)})
+
+
+def _timeline(conn) -> dict | None:
+    try:
+        from ..timeline import build
+        return build(conn, get_settings(conn))
+    except Exception:
+        return None
 
 
 def _sparks(conn) -> dict:

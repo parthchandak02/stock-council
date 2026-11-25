@@ -39,7 +39,7 @@ def _x(x, d=2):
 
 
 def key_numbers(sheet: dict) -> list[dict]:
-    """The nine checks in plain words, grouped like Dad's prompt."""
+    """The nine checks in plain words, grouped like the council's questions."""
     f = sheet.get("fundamentals") or {}
     t = sheet.get("technicals") or {}
     annual = f.get("annual") or [{}]

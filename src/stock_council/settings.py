@@ -9,7 +9,8 @@ from .store import ensure_schema
 
 from .config import IS_US, MARKET
 
-DEFAULT_SCHEDULE = {"enabled": True, "time": MARKET["default_time"], "days": [0, 1, 2, 3, 4], "max_stocks": 20}  # Mon=0, market time
+DEFAULT_SCHEDULE = {"enabled": True, "time": MARKET["default_time"], "days": [0, 1, 2, 3, 4], "max_stocks": 20,
+                    "screen": "preset:volume-shock"}  # Mon=0, market time; screen = which Screener screen runs
 DEFAULT_EMAIL = {"enabled": False, "to": [], "cc": []}
 DEFAULT_WHATSAPP = {"enabled": not IS_US}   # India: Dad's group. US: site only (for now)
 DEFAULT_TELEMETRY = {"show_costs": True}   # show what each AI call cost, on every page
@@ -59,3 +60,18 @@ def save_setting(conn, key: str, value) -> None:
     ensure_schema(conn, "settings", SCHEMA)
     conn.execute("INSERT OR REPLACE INTO settings VALUES (?,?,datetime('now'))", (key, json.dumps(value)))
     conn.commit()
+
+
+def evening_screen(st: dict) -> dict:
+    """The Screener screen the evening run uses, as it currently reads in the Screener (edits included)."""
+    from .universe import PRESETS
+    key = (st.get("schedule") or {}).get("screen") or "preset:volume-shock"
+    kind, _, ident = key.partition(":")
+    base = None
+    if kind == "s":
+        base = next((x for x in st.get("screens") or [] if x["id"] == ident), None)
+    if base is None:
+        key = key if kind == "preset" and any(p["id"] == ident for p in PRESETS) else "preset:" + PRESETS[0]["id"]
+        base = next(p for p in PRESETS if "preset:" + p["id"] == key)
+    edits = (st.get("screener_state") or {}).get("edits") or {}
+    return {"key": key, "name": base["name"], "rules": edits[key] if key in edits else base["rules"], "edited": key in edits}

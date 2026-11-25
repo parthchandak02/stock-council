@@ -23,7 +23,7 @@ import uuid
 
 from ..daily import db, log_order, orders_db, run_custom, run_one, run_screen_job, saved_screen_history, start_run
 from ..universe import METRICS, PRESETS, run_rules
-from ..settings import get_settings, save_setting
+from ..settings import evening_screen, get_settings, save_setting
 from .view import FILTER_LABELS, key_numbers, nice_name, short_fail, short_name, why
 
 HERE = Path(__file__).parent
@@ -97,6 +97,8 @@ def usd(x) -> str:
 def funnel_steps(run: dict) -> list[tuple[str, int]]:
     """How many volume spikes are left after each rule, in order (a stock drops out at its first failed rule)."""
     fn, f = run.get("funnel") or {}, run.get("filters") or {}
+    if fn.get("steps") is not None:        # runs of a Screener screen: its own rules, in order
+        return [(label, n) for label, n in fn["steps"]]
     C, U = MARKET["cur"], MARKET["unit_label"]
     rules = [("market cap", f"Market cap over {C}{f.get('min_market_cap_cr', 0):,.0f} {U}"),
              ("P/E", f"P/E under {f.get('max_pe', 0):g}"), ("ROE", f"ROE over {f.get('min_roe_pct', 0):g}%"),
@@ -130,7 +132,16 @@ def market_href(request, code: str) -> str:
     return ("/us/" if code == "us" else "/") + section
 
 
-tpl.env.globals.update(market_href=market_href)
+def evening_spike():
+    """The evening screen's 'volume spike above N×' rule, drawn on volume charts."""
+    try:
+        return next((v for k, o, v in evening_screen(get_settings(db()))["rules"]
+                     if k == "spike_x" and o == ">" and not isinstance(v, str)), None)
+    except Exception:
+        return None
+
+
+tpl.env.globals.update(market_href=market_href, evening_spike=evening_spike)
 tpl.env.globals.update(B=B, M=MARKET, IS_US=IS_US, BUILD=BUILD, show_costs=show_costs, funnel_steps=funnel_steps,
                        rules_qs=rules_qs)
 tpl.env.filters["usd"] = usd
@@ -449,7 +460,10 @@ def how(request: Request):
     conn = db()
     st = get_settings(conn)
     run = _latest_screen(conn)
-    return tpl.TemplateResponse(request, "how.html", {"st": st, "run": run, "nav": "how", "avg_stock": _avg_stock()})
+    from ..universe import rule_label
+    ev = evening_screen(st)
+    return tpl.TemplateResponse(request, "how.html", {"st": st, "run": run, "nav": "how", "avg_stock": _avg_stock(),
+                                                      "evening": ev, "rule_texts": [rule_label(*r) for r in ev["rules"]]})
 
 
 @app.get("/history", response_class=HTMLResponse)
@@ -492,7 +506,8 @@ def settings_page(request: Request, saved: str = "", sent: str = ""):
         r["name"] = "News search" if r["model"] == "news" else names.get(r["model"], r["model"].split("/")[-1])
     return tpl.TemplateResponse(request, "settings.html", {
         "st": st, "catalogue": cat, "efforts": EFFORTS, "saved": saved, "sent": sent, "nav": "settings",
-        "spend": spend, "key": openrouter_key(),
+        "spend": spend, "key": openrouter_key(), "evening": evening_screen(st),
+        "screen_choices": [("preset:" + p["id"], p["name"]) for p in PRESETS] + [("s:" + x["id"], x["name"]) for x in st.get("screens") or []],
         "addr_status": status, "times": times,
         "daynames": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]})
 
@@ -541,7 +556,8 @@ async def save_settings(request: Request):
             "enabled": form.get("sched_on") == "1",
             "time": t if _re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t) else current["schedule"]["time"],
             "days": sorted({int(d) for d in form.getlist("sched_days") if d.isdigit() and int(d) <= 6}),
-            "max_stocks": max(1, min(30, int(num(form.get("max_stocks"), current["schedule"]["max_stocks"]))))})
+            "max_stocks": max(1, min(30, int(num(form.get("max_stocks"), current["schedule"]["max_stocks"])))),
+            "screen": form.get("sched_screen") or current["schedule"].get("screen") or "preset:volume-shock"})
         split = lambda s: [x.strip() for x in (s or "").replace("\n", ",").split(",") if "@" in x]
         to, cc = split(form.get("email_to")), split(form.get("email_cc"))
         save_setting(conn, "email", {"enabled": form.get("email_on") == "1", "to": to, "cc": cc})
@@ -866,7 +882,9 @@ def company(request: Request, isin: str):
         "SELECT p.run_id, p.isin, p.verdict, p.price, r.day FROM picks p JOIN runs r ON r.id=p.run_id "
         "WHERE p.isin=? AND p.status='done' ORDER BY r.id DESC LIMIT 10", (isin,))]
     st = get_settings(conn)
-    return tpl.TemplateResponse(request, "company.html", {
+    ev = evening_screen(st)
+    lim = {k: v for k, o, v in ev["rules"] if k in ("pe", "roe", "de") and not isinstance(v, str)}
+    return tpl.TemplateResponse(request, "company.html", {"lim": lim, "evening": ev,
         "c": c["ident"], "m": c["m"], "day": c["day"], "calls": calls, "peers": peers(conn, isin),
         "filters": st["filters"], "nav": "screener", "avg_stock": _avg_stock()})
 

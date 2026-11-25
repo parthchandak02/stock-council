@@ -14,6 +14,8 @@
     <div class="set">
       <label><span class="t"><b>Run automatically</b><span>Screen, council and {{ 'WhatsApp' if st.whatsapp.enabled else 'the site' }}, once a day</span></span>
         <input type="checkbox" name="sched_on" value="1" {{ 'checked' if sc.enabled }} class="switch"></label>
+      <label><span class="t"><b>Screen to run</b><span>Any screen from the Screener, as it reads there · <a href="{{ B }}/screener?{{ 'preset=' ~ evening.key[7:] if evening.key.startswith('preset:') else 's=' ~ evening.key[2:] }}" style="text-decoration:underline">edit its rules</a></span></span>
+        <select name="sched_screen" aria-label="Screen to run each evening">{% for k, n in screen_choices %}<option value="{{ k }}" {{ 'selected' if k == evening.key }}>{{ n }}</option>{% endfor %}</select></label>
       <label><span class="t"><b>Time</b><span>{{ 'New York' if IS_US else 'India' }} time</span></span>
         <select name="sched_time" aria-label="Run time">{% for t in times %}<option {{ 'selected' if t == sc.time }}>{{ t }}</option>{% endfor %}</select></label>
       <div class="days-row"><span class="t"><b>Days</b><span>Holidays are skipped</span></span>
@@ -68,15 +70,6 @@
 </div>
 
 <div class="col">
-  <section class="panel">
-    <div class="ph"><h2>{{ icon('filter', 16) }}Filters</h2><span class="r">Dad's screen</span></div>
-    <div class="set">
-    {% for k, pair in FILTER_LABELS.items() %}{% set title, desc = pair %}
-      <label><span class="t"><b>{{ title }}</b><span>{{ desc.format(v=st.filters[k]) }}</span></span>
-        <input type="number" step="any" name="{{ k }}" value="{{ st.filters[k] }}" inputmode="decimal"></label>
-    {% endfor %}
-    </div>
-  </section>
 
   <details class="panel prompt" id="prompt">
     <summary class="ph"><h2>{{ icon('council', 16) }}Question for the council</h2><span class="r">{{ st.prompt.count('\n') + 1 }} lines {{ icon('chevdown', 14, 'tw') }}</span></summary>

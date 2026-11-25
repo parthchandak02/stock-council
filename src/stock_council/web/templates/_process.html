@@ -9,7 +9,7 @@
 {% if run.status == 'failed' %}<div class="note bad">{{ icon('alert', 16) }}<span>Stopped: {{ (run.error or 'unknown error')[:200] }}</span></div>{% endif %}
 
 {% set items = [('Download', 'files from ' ~ M.exchanges, 0), ('Scan', (fn.companies|num ~ ' companies') if fn.companies else '', 1),
-                ('Filter', ((fn.spikes ~ ' spikes') if fn.spikes is defined else ''), 2),
+                ('Screen' if fn.steps is defined else 'Filter', ((fn.matches ~ ' match') if fn.steps is defined else ((fn.spikes ~ ' spikes') if fn.spikes is defined else '')), 2),
                 ('Council', (ndone ~ ' of ' ~ picks|length) if picks else '', 3), ('Done', (picks|length ~ ' judged') if run.status == 'done' else '', 4)] %}
 <section class="panel"><div class="stages">
 {% for name, sub, i in items if screen or i >= 3 %}
@@ -19,7 +19,8 @@
 {% endfor %}
 </div></section>
 
-<div class="{{ 'two' if screen and fn.spikes else '' }}">
+{% set has_funnel = screen and (fn.spikes or fn.steps is defined) %}
+<div class="{{ 'two' if has_funnel else '' }}">
   <div class="col">
   {% for p in picks %}{% set st = p.status %}
     <section class="panel">
@@ -65,18 +66,19 @@
   {% endfor %}
   </div>
 
-  {% if screen and fn.spikes %}
+  {% if has_funnel %}
   <div class="col">
     <section class="panel">
-      <div class="ph"><h2>{{ icon('filter', 16) }}Why these {{ (fn.passed or [])|length }}</h2><span class="r">of {{ fn.spikes }} volume spikes</span></div>
+      <div class="ph"><h2>{{ icon('filter', 16) }}Why these {{ (fn.passed or [])|length }}</h2><span class="r">{% if fn.steps is defined %}{{ fn.screen }} · {{ fn.companies|num }} companies{% else %}of {{ fn.spikes }} volume spikes{% endif %}</span></div>
       {% set rej = fn.rejected or [] %}
       <div class="rows">
       {% for label, n in funnel_steps(run) %}
-        <div class="funrow"><span style="font-size:14px">{{ label }}</span><div class="gauge"><i class="bg-{{ 'good' if loop.last else 'focus' }}" style="width:{{ [n / fn.spikes * 100, 2]|max }}%"></i></div><b>{{ n }}</b></div>
+        {% set top = (fn.companies if fn.steps is defined else fn.spikes) or 1 %}
+        <div class="funrow"><span style="font-size:14px">{{ label }}</span><div class="gauge"><i class="bg-{{ 'good' if loop.last else 'focus' }}" style="width:{{ [n / top * 100, 2]|max }}%"></i></div><b>{{ n }}</b></div>
       {% endfor %}
       </div>
       {% if fn.passed %}<ul class="mini">{% for r in fn.passed %}
-        <li><span class="ok">{{ icon('check', 14) }}</span><b>{{ r.name|nice }}</b><span class="muted">{{ r.spike_x }}× · P/E {{ r.pe|round(0)|int if r.pe else '–' }} · ROE {{ r.roe_pct|round(0)|int if r.roe_pct else '–' }}%</span></li>
+        <li><span class="ok">{{ icon('check', 14) }}</span><b>{{ r.name|nice }}</b><span class="muted">{% if r.spike_x %}{{ r.spike_x|round(1) }}× · {% endif %}P/E {{ r.pe|round(0)|int if r.pe else '–' }} · ROE {{ (r.roe_pct or r.roe)|round(0)|int if (r.roe_pct or r.roe) else '–' }}%</span></li>
       {% endfor %}</ul>{% endif %}
       {% if rej %}<details class="peek"><summary>{{ icon('x', 14) }}Why {{ rej|length }} spikes were dropped{{ icon('chevdown', 14, 'tw') }}</summary>
         <ul class="mini" style="margin:0 -16px -12px">{% for r in rej|sort(attribute='spike_x', reverse=True) %}

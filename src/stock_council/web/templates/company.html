@@ -26,13 +26,13 @@
 
 <div class="two">
   <div class="col">
-    {{ pchart(c.isin, calls[0].day if calls else '') }}
+    {{ pchart(c.isin, calls[0].day if calls else '', evening_spike()) }}
     <section class="panel">
-      <div class="ph"><h2>{{ icon('shield', 16) }}Key numbers</h2><span class="r">tick = Dad's limit</span></div>
+      <div class="ph"><h2>{{ icon('shield', 16) }}Key numbers</h2><span class="r">tick = {{ evening.name }} rule</span></div>
       <div class="grid">
-        {{ tile('P/E', (m.pe|f1), '', gauge(((m.pe or 0) / 60 * 100), 'good' if m.pe and m.pe < filters.max_pe else 'warn', filters.max_pe / 60 * 100, '0', 'limit ' ~ filters.max_pe|int) if m.pe else None) }}
-        {{ tile('ROE', (m.roe|f1), '%', gauge(((m.roe or 0) / 40 * 100), 'good' if m.roe and m.roe > filters.min_roe_pct else 'warn', filters.min_roe_pct / 40 * 100, '0', 'limit ' ~ filters.min_roe_pct|int ~ '%') if m.roe is not none else None) }}
-        {{ tile('Debt / equity', m.de|f2, '', gauge(((m.de or 0) / 1.5 * 100), 'good' if m.de is not none and m.de < filters.max_debt_to_equity else 'warn', filters.max_debt_to_equity / 1.5 * 100, '0', 'limit ' ~ filters.max_debt_to_equity) if m.de is not none and not m.lender else None) }}
+        {{ tile('P/E', (m.pe|f1), '', gauge(((m.pe or 0) / 60 * 100), 'good' if m.pe and (lim.pe is not defined or m.pe < lim.pe) else 'warn', (lim.pe / 60 * 100) if lim.pe is defined else None, '0', ('limit ' ~ lim.pe|int) if lim.pe is defined else '60') if m.pe else None) }}
+        {{ tile('ROE', (m.roe|f1), '%', gauge(((m.roe or 0) / 40 * 100), 'good' if m.roe and (lim.roe is not defined or m.roe > lim.roe) else 'warn', (lim.roe / 40 * 100) if lim.roe is defined else None, '0', ('limit ' ~ lim.roe|int ~ '%') if lim.roe is defined else '40%') if m.roe is not none else None) }}
+        {{ tile('Debt / equity', m.de|f2, '', gauge(((m.de or 0) / 1.5 * 100), 'good' if m.de is not none and (lim.de is not defined or m.de < lim.de) else 'warn', (lim.de / 1.5 * 100) if lim.de is defined else None, '0', ('limit ' ~ lim.de) if lim.de is defined else '1.5') if m.de is not none and not m.lender else None) }}
         {{ tile('ROCE', (m.roce|f1), '%') }}
         {{ tile('Sales growth, 3 yr', (m.sales_cagr_3y|f1), '%/yr') }}
         {{ tile('Profit growth, 3 yr', (m.profit_cagr_3y|f1), '%/yr') }}

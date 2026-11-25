@@ -1,7 +1,7 @@
 """Evening WhatsApp message through Hermes.
 
 The app writes the text to a local socket; a small Hermes-side script sends it to one fixed group
-("Invest · Stock & ETF Screen": Dad, Parth, Hermes). The app cannot choose the recipient.
+("Invest · Stock & ETF Screen"). The app cannot choose the recipient.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def build_message(run: dict, picks: list[dict], site: str = "") -> str:
     day = date.fromisoformat(run["day"]).strftime("%a %-d %b")
     fn = run.get("funnel") or {}
     lines = [f"📈 *Stock Council* · {day}",
-             f"{len(picks)} stock{'s' if len(picks) != 1 else ''} passed ({run.get('spikes') or fn.get('spikes') or '?'} volume spikes)", ""]
+             (f"{len(picks)} stock{'s' if len(picks) != 1 else ''} from \"{fn['screen']}\" ({fn.get('matches', '?')} of {fn.get('companies') or 0:,} companies match)" if fn.get('screen') else f"{len(picks)} stock{'s' if len(picks) != 1 else ''} passed ({run.get('spikes') or fn.get('spikes') or '?'} volume spikes)"), ""]
     for p in picks:
         v = p.get("verdict") or {}
         call = v.get("call") or ("ERROR" if p.get("error") else "-")

@@ -101,7 +101,7 @@ if IS_US:   # US ownership: no promoter/pledge; insiders, institutions and short
     })
 
 PRESETS = [
-    {"id": "volume-shock", "name": "Volume shock", "desc": "Dad's screen",
+    {"id": "volume-shock", "name": "Volume shock", "desc": "Big volume on solid businesses",
      "rules": [["spike_x", ">", 6], ["volume", ">", 10000], ["mcap", ">", 500], ["pe", "<", 40], ["roe", ">", 12], ["de", "<", 1]]},
     {"id": "quality", "name": "Quality at a fair price", "desc": "High returns, low debt, not expensive",
      "rules": [["roe", ">", 15], ["roce", ">", 15], ["de", "<", 0.5], ["pe", "<", 30], ["mcap", ">", 500]]},
@@ -113,9 +113,9 @@ PRESETS = [
      "rules": [["cfo_conv", ">", 90], ["fcf_neg_years", "<", 1], ["de", "<", 0.5], ["roe", ">", 15]]},
 ]
 
-if IS_US:   # Dad's rules sized for the US ($ millions), plus US-flavoured ideas
+if IS_US:   # the same ideas sized for the US ($ millions), plus US-flavoured ones
     PRESETS = [
-        {"id": "volume-shock", "name": "Volume shock", "desc": "Dad's rules, US-sized",
+        {"id": "volume-shock", "name": "Volume shock", "desc": "Big volume on solid businesses",
          "rules": [["spike_x", ">", 6], ["turnover_cr", ">", 1], ["mcap", ">", 300], ["pe", "<", 40], ["roe", ">", 12], ["de", "<", 1]]},
         {"id": "quality", "name": "Quality at a fair price", "desc": "High returns, low debt, not expensive",
          "rules": [["roe", ">", 15], ["roce", ">", 15], ["de", "<", 0.5], ["pe", "<", 30], ["mcap", ">", 1000]]},
@@ -398,3 +398,47 @@ def run_rules(rules: list, conn=None, limit: int = 200) -> dict:
 
 # The Screener lists only these two by default; the others stay usable by link.
 SHOWN_PRESETS = ["volume-shock", "quality"]
+
+
+def rule_label(key: str, op: str, val) -> str:
+    """'ROE above 12%' style text for a rule."""
+    name, _, unit, _ = METRICS.get(key, (key, "", "", ""))
+    if isinstance(val, str) and val.startswith("@"):
+        return f"{name} {'above' if op == '>' else 'below'} {METRICS.get(val[1:], (val[1:],))[0]}"
+    v = f"{val:,.0f}" if abs(val) >= 1000 else f"{val:g}"
+    pre, u = "", ""
+    if unit in ("%", "×"):
+        u = unit
+    elif unit.startswith(MARKET["cur"]):
+        pre, u = MARKET["cur"], " " + unit[len(MARKET["cur"]):].strip() if unit[len(MARKET["cur"]):].strip() else ""
+    elif unit:
+        u = " " + unit
+    return f"{name.split(' (')[0]} {'above' if op == '>' else 'below'} {pre}{v}{u}"
+
+
+def funnel(rules: list, conn=None) -> dict:
+    """Run a screen and count how many companies are left after each rule, in order (the evening run's
+    'why these' panel). Same engine and same result as the Screener."""
+    conn = conn or db()
+    res = run_rules(rules, conn, limit=500)
+    today, df = table(conn)
+    left = pd.Series(True, index=df.index)
+    steps = []
+    for key, op, val in rules:
+        if key not in df.columns:
+            continue
+        col = df[key]
+        if isinstance(val, str) and val.startswith("@"):
+            if val[1:] not in df.columns:
+                continue
+            other = df[val[1:]]
+            cond = ((col > other) if op == ">" else (col < other)) & other.notna()
+        else:
+            cond = (col > val) if op == ">" else (col < val)
+        cond &= col.notna()
+        if key == "de" and "lender" in df.columns:
+            cond |= df["lender"].fillna(0).astype(bool)
+        left &= cond
+        steps.append([rule_label(key, op, val), int(left.sum())])
+    res["steps"] = steps
+    return res

@@ -3,19 +3,20 @@
 {% block main %}
 {% set fn = (run or {}).funnel or {} %}
 <div class="pagehead">
-  <div><h1>How it works</h1><p>Unusual trading, checked by facts, judged by {{ st.models|length }} AIs.</p></div>
+  <div><h1>How it works</h1><p>Your screen finds the stocks; facts and {{ st.models|length }} AIs judge them.</p></div>
   {% if run %}<a class="btn ghost" href="{{ B }}/run/{{ run.id }}">{{ icon('play', 15) }}Watch the last run</a>{% endif %}
 </div>
 
 <section class="panel"><div class="flow">
   <div><h3>{{ icon('download', 17) }}Collect</h3><div class="n">{{ (fn.companies or (5900 if IS_US else 5000))|num }}<small>companies</small></div>
     <p>{% if IS_US %}Closing price and volume for every US-listed company, plus SEC filings.{% else %}Closing price, volume and delivery from NSE and BSE, every evening.{% endif %}</p></div>
-  <div><h3>{{ icon('volume', 17) }}Spot the shock</h3><div class="n">{{ (run.spikes if run else '–') }}<small>volume spikes</small></div>
-    <p>A week of volume over <b>{{ st.filters.volume_spike_multiple|round(1) }}×</b> its 1-year average. Big money often shows up as volume first.</p></div>
-  <div><h3>{{ icon('scale', 17) }}Check the business</h3><div class="n">{{ (fn.passed or [])|length if run else '–' }}<small>pass</small></div>
-    <div class="filters"><span class="tag">Mkt cap &gt; {{ M.cur }}{{ st.filters.min_market_cap_cr|int }} {{ M.unit_label }}</span><span class="tag">P/E &lt; {{ st.filters.max_pe|int }}</span><span class="tag">ROE &gt; {{ st.filters.min_roe_pct|int }}%</span><span class="tag">D/E &lt; {{ st.filters.max_debt_to_equity }}</span></div></div>
+  <div><h3>{{ icon('filter', 17) }}Run a screen</h3><div class="n">{{ fn.matches if fn.matches is defined else '–' }}<small>match</small></div>
+    <p>The evening runs <b>{{ evening.name }}</b> from the Screener{% if evening.edited %} (as you edited it){% endif %}:</p>
+    <div class="filters">{% for t in rule_texts %}<span class="tag">{{ t }}</span>{% endfor %}</div></div>
+  <div><h3>{{ icon('shield', 17) }}Check the business</h3><div class="n">{{ (st.schedule.max_stocks) }}<small>at most</small></div>
+    <p>The top matches each get one fact sheet from official filings and one news search, the same for every AI.</p></div>
   <div><h3>{{ icon('council', 17) }}Ask the council</h3><div class="n">{{ st.models|length }}<small>AI votes</small></div>
-    <p>Same fact sheet and news for every AI. Each answers the same questions; votes are counted in code.</p></div>
+    <p>Each AI answers the same questions; votes are counted in code.</p></div>
 </div></section>
 
 <div class="two even">
@@ -31,7 +32,7 @@
     <div class="ph"><h2>{{ icon('clock', 16) }}When</h2></div>
     <div class="rows">
       <div class="whenrow"><b style="font-weight:600;font-size:14px">{{ 'Weekdays' if st.schedule.days == [0,1,2,3,4] else 'Chosen days' }} {{ st.schedule.time }}</b><span class="muted" style="font-size:14px">{{ 'New York' if IS_US else 'India' }} time, after the market closes{% if not st.schedule.enabled %} (paused){% endif %}</span></div>
-      {% if st.whatsapp.enabled %}<div class="whenrow"><b style="font-weight:600;font-size:14px">WhatsApp</b><span class="muted" style="font-size:14px">a short list to the family group</span></div>{% endif %}
+      {% if st.whatsapp.enabled %}<div class="whenrow"><b style="font-weight:600;font-size:14px">WhatsApp</b><span class="muted" style="font-size:14px">a short list to the WhatsApp group</span></div>{% endif %}
       <div class="whenrow"><b style="font-weight:600;font-size:14px">Any time</b><span class="muted" style="font-size:14px">check one stock from Today</span></div>
     </div>
   </section>

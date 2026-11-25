@@ -175,13 +175,18 @@ def run_screen_job(kind: str = "daily", max_stocks: int = 20, require_today: boo
                 "SELECT 1 FROM runs WHERE kind='daily' AND day=? AND status='done' AND id!=?", (latest, run_id)).fetchone():
             raise NothingToDo(f"daily run for {latest} already done")
         _run_set(conn, run_id, day=latest, stage="scan")
-
-        def progress(res: ScreenResult):
-            _run_set(conn, run_id, stage="filter", spikes=res.spikes, funnel=_funnel(res))
-
-        res = run_screen(st["filters"], on_progress=progress)
-        _run_set(conn, run_id, stage="council", spikes=res.spikes, funnel=_funnel(res))
-        rows = [{**r, "symbol": r["nse_symbol"] or r["bse_code"]} for r in res.passed[:max_stocks]]
+        # the screen chosen in Settings, run by the same engine as the Screener page
+        from .settings import evening_screen
+        from .universe import funnel as screen_funnel
+        scr = evening_screen(st)
+        _run_set(conn, run_id, stage="filter")
+        res = screen_funnel(scr["rules"], conn)
+        keep = ("isin", "symbol", "name", "price", "change_1d", "spike_x", "volume", "mcap", "pe", "roe", "de", "delivery")
+        fn = {"screen": scr["name"], "screen_key": scr["key"], "rules": scr["rules"], "companies": res["universe"],
+              "matches": len(res["hits"]), "steps": res["steps"],
+              "passed": [{k: (None if h.get(k) != h.get(k) else h.get(k)) for k in keep} for h in res["hits"][:50]]}
+        _run_set(conn, run_id, stage="council", spikes=len(res["hits"]), funnel=fn)
+        rows = [{"isin": h["isin"], "symbol": h["symbol"], "name": h.get("name")} for h in res["hits"][:max_stocks]]
         cost = _council_stage(conn, run_id, rows, st)
         _run_set(conn, run_id, status="done", stage="done", finished=_now(), cost_usd=cost)
     except NothingToDo:

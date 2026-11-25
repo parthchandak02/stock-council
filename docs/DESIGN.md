@@ -13,6 +13,8 @@ Read with `~/.claude/skills/design-principles/references/principles.md`. This fi
 - Colours: dark navy first, light too; tokens in static/style.css. DII ownership is pink, not violet (violet ban).
 - Save model: autosave everywhere (Settings, Screener edits on the server for everyone; broker order drafts in the browser per stock) with a visible status.
 - Actions: filled = does something (Screen, Save, Check, Run now, Ask the council, Open in Gmail); outline = secondary or navigation.
+- Evening run (24 Nov 2026): runs any Screener screen chosen in Settings → Evening run → "Screen to run" (default "Volume shock"), exactly as it reads in the Screener (edits included). No filters in Settings; no person's name anywhere in the UI.
+- Charts for the volume-shock study: volume as × usual under the price chart, with the evening screen's spike rule as a line (scale capped so ordinary days stay readable); Results → Health tab (cash conversion, debt/equity, cash cycle by year, with reference lines).
 - Navigation: India and US are the same site; switching keeps the section (Screener, History, Settings, ...); a stock or run page goes to that market's Today.
 - Charts (24 Nov 2026): interactive price chart on stock and company pages (Lightweight Charts: ranges 1M to Max, line or candles, 50/200-day averages, vs Nifty 50 / S&P 500, volume spikes, call day, hover readout); results as small bar charts; 3-month sparklines in Today and the Screener; return bars in Track record. See the skill's charts.md.
 - Company page (/company/<isin>): any listed stock, reached from Screener results and peers; Ask the council from there.

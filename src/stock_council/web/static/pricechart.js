@@ -24,7 +24,8 @@
       ma50: store.get('ma50', true), ma200: store.get('ma200', false), cmp: store.get('cmp', false),
     };
     const cache = {};
-    let chart, main, vol, s50, s200, sIdx, data, bars = [], byTime = new Map();
+    let chart, chart2, rel, main, vol, s50, s200, sIdx, data, bars = [], byTime = new Map();
+    const thr = parseFloat(box.dataset.spike) || 4;   // the evening screen's spike rule, else 4×
 
     // ---------- controls ----------
     const ctrl = box.querySelector('.pc-ctrl');
@@ -57,7 +58,7 @@
         layout: { background: { type: 'solid', color: 'transparent' }, textColor: css('--faint'), fontSize: 12,
                   fontFamily: getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace', attributionLogo: false },
         grid: { vertLines: { visible: false }, horzLines: { color: css('--line') } },
-        rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.24 } },
+        rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.06 }, minimumWidth: 64 },
         timeScale: { borderVisible: false, rightOffset: 5, fixLeftEdge: true, lockVisibleTimeRangeOnResize: true },   // room for the last marker's label
         crosshair: { mode: LC.CrosshairMode.Magnet,
                      vertLine: { color: css('--mute'), width: 1, style: LC.LineStyle.Dashed, labelBackgroundColor: css('--raise') },
@@ -66,7 +67,16 @@
       };
     }
     chart = LC.createChart(el, { autoSize: true, ...theme() });
-    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { chart.applyOptions(theme()); draw(); });
+    // second chart: volume as a multiple of usual, same days, same range and crosshair as the price chart
+    const el2 = box.querySelector('.pc2');
+    const theme2 = () => ({ ...theme(), timeScale: { visible: false, rightOffset: 5, fixLeftEdge: true },
+      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.02 }, minimumWidth: 64 } });
+    chart2 = LC.createChart(el2, { autoSize: true, ...theme2() });
+    let syncing = false;
+    const link = (a, b) => a.timeScale().subscribeVisibleLogicalRangeChange(r => {
+      if (syncing || !r) return; syncing = true; b.timeScale().setVisibleLogicalRange(r); syncing = false; });
+    link(chart, chart2); link(chart2, chart);
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { chart.applyOptions(theme()); chart2.applyOptions(theme2()); draw(); });
 
     async function fetchSpan(span) {
       if (cache[span]) return cache[span];
@@ -113,9 +123,16 @@
         main = chart.addAreaSeries({ lineColor: C.price, lineWidth: 2, topColor: hexA(C.price, 0.22), bottomColor: hexA(C.price, 0), priceFormat: fmt, priceLineVisible: false });
         main.setData(view.map(b => ({ time: b.t, value: cmp ? pct(b.c) : b.c })));
       }
-      vol = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
-      chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false });
-      vol.setData(view.map((b, i) => ({ time: b.t, value: b.v, color: (b.x || 0) >= 4 ? hexA(C.spike, 0.9) : hexA(C.vol, 0.9) })));
+      if (rel) chart2.removeSeries(rel);
+      // top of the scale: a bit above the rule and above ordinary days; rare extremes reach the top (exact value on hover)
+      const xs = view.map(b => b.x).filter(v => v != null).sort((a, b) => a - b);
+      const p95 = xs.length ? xs[Math.floor(xs.length * 0.95)] : thr;
+      const cap = Math.max(thr * 1.6, p95 * 1.4);
+      rel = chart2.addHistogramSeries({ priceFormat: { type: 'custom', formatter: v => v.toFixed(0) + '×' }, lastValueVisible: false, priceLineVisible: false,
+        autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: cap } }) });
+      rel.setData(view.map(b => b.x == null ? { time: b.t } : { time: b.t, value: b.x, color: b.x >= thr ? C.spike : hexA(C.vol, 0.95) }));
+      rel.createPriceLine({ price: thr, color: css('--ink'), lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true, title: '' });
+      rel.createPriceLine({ price: 1, color: css('--line2'), lineWidth: 1, lineStyle: LC.LineStyle.Dotted, axisLabelVisible: false, title: '' });
       const line = (color, pts, style) => {
         const s = chart.addLineSeries({ color, lineWidth: 1.5, lineStyle: style || 0, priceFormat: fmt, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false });
         s.setData(pts); return s;
@@ -130,17 +147,17 @@
       }
       // markers: the council's call day, and the last few volume spikes
       const marks = [];
-      (data.spikes || []).filter(t => t >= from).slice(-12).forEach(t => marks.push({ time: t, position: 'belowBar', color: C.spike, shape: 'circle', size: 0.6 }));
+      view.filter(b => (b.x || 0) >= thr).slice(-12).map(b => b.t).forEach(t => marks.push({ time: t, position: 'belowBar', color: C.spike, shape: 'circle', size: 0.6 }));
       if (data.call && byTime.has(data.call) && data.call >= from) marks.push({ time: data.call, position: 'aboveBar', color: css('--ink'), shape: 'arrowDown', text: 'Call' });
       main.setMarkers(marks.sort((a, b) => a.time < b.time ? -1 : 1));
-      chart.timeScale().fitContent();
+      chart.timeScale().fitContent(); chart2.timeScale().fitContent();
       readout(null);
       box.querySelector('.pc-legend').innerHTML = [
         `<span><i class="ln" style="background:${C.price}"></i>${cmp ? 'This stock' : 'Price'}</span>`,
         state.ma50 ? `<span><i class="ln" style="background:${C.ma50}"></i>50-day avg</span>` : '',
         state.ma200 ? `<span><i class="ln dash" style="border-color:${C.ma200}"></i>200-day avg</span>` : '',
         cmp ? `<span><i class="ln dot" style="border-color:${C.idx}"></i>${data.index.name}</span>` : '',
-        `<span><i class="sw" style="background:${C.spike}"></i>volume over 4× usual</span>`,
+        `<span><i class="sw" style="background:${C.spike}"></i>volume over ${thr}× usual</span>`,
         data.call && data.call >= from ? '<span>▼ day of the call</span>' : ''].join('');
     }
 
@@ -160,7 +177,7 @@
       const rows = [
         ['Close' + (day == null ? '' : ` <em class="${day >= 0 ? 'pos' : 'neg'}">${sign(day)}</em>`), fmtP(b.c)],
         ['Open', fmtP(b.o)], ['High', fmtP(b.h)], ['Low', fmtP(b.l)],
-        ['Volume' + (b.x ? ` <em class="${b.x >= 4 ? 'warn' : 'faint'}">${b.x}× usual</em>` : ''), fmtV(b.v)],
+        ['Volume' + (b.x ? ` <em class="${b.x >= thr ? 'warn' : 'faint'}">${b.x}× usual</em>` : ''), fmtV(b.v)],
       ];
       if (b.d != null) rows.push(['Delivered', b.d + '%']);
       if (state.ma50 && val(data.ma50) != null) rows.push(['<i class="ln s50"></i>50-day avg', fmtP(val(data.ma50))]);
@@ -174,7 +191,21 @@
     }
     const short = t => new Date(t + 'T00:00:00').toLocaleDateString(undefined, t.slice(0, 4) === bars[bars.length - 1].t.slice(0, 4) ? {day: 'numeric', month: 'short'} : {day: 'numeric', month: 'short', year: 'numeric'});
     const nice = (t, long) => new Date(t + 'T00:00:00').toLocaleDateString(undefined, long ? {weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'} : {day: 'numeric', month: 'short', year: 'numeric'});
+    const timeOf = p => typeof p.time === 'string' ? p.time : `${p.time.year}-${String(p.time.month).padStart(2, '0')}-${String(p.time.day).padStart(2, '0')}`;
+    chart2.subscribeCrosshairMove(p => {
+      if (syncing) return;
+      if (!p || !p.time || !p.point) { readout(null); chart.clearCrosshairPosition && chart.clearCrosshairPosition(); return; }
+      const t = timeOf(p), b = bars[byTime.get(t)];
+      readout(t);
+      if (b && main && chart.setCrosshairPosition) { syncing = true; chart.setCrosshairPosition(state.cmp ? 0 : b.c, p.time, main); syncing = false; }
+      const w = el.clientWidth, x = p.point.x;
+      tip.style.left = (x > w / 2 ? Math.max(4, x - tip.offsetWidth - 14) : x + 14) + 'px';
+    });
     chart.subscribeCrosshairMove(p => {
+      if (syncing) return;
+      if (p && p.time && rel && chart2.setCrosshairPosition) {
+        const b = bars[byTime.get(timeOf(p))]; syncing = true; chart2.setCrosshairPosition(b && b.x != null ? b.x : 0, p.time, rel); syncing = false;
+      } else if (chart2.clearCrosshairPosition) chart2.clearCrosshairPosition();
       if (!p || !p.time || !p.point || p.point.x < 0) { readout(null); return; }
       const t = typeof p.time === 'string' ? p.time : `${p.time.year}-${String(p.time.month).padStart(2, '0')}-${String(p.time.day).padStart(2, '0')}`;
       readout(t);

@@ -39,7 +39,7 @@
 
 <div class="two">
   <div class="col">
-    {{ pchart(p.isin, run.day) }}
+    {{ pchart(p.isin, run.day, evening_spike()) }}
 
     {% if not IS_US and p.status == 'done' %}
     <section class="panel holdings" id="holdings" data-symbol="{{ p.symbol }}" data-bse="{{ s.bse_code or '' }}">

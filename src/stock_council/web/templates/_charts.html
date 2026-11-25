@@ -1,22 +1,24 @@
 {% from "_ui.html" import icon %}
 {# Interactive price chart (pricechart.js). call = the council's call day, marked on the chart. #}
-{% macro pchart(isin, call='') -%}
-<section class="panel pchart" id="pchart" data-keep data-isin="{{ isin }}" data-call="{{ call }}" data-cur="{{ M.cur }}" data-index="{{ 'S&P 500' if IS_US else 'Nifty 50' }}">
+{% macro pchart(isin, call='', spike=none) -%}
+<section class="panel pchart" id="pchart" data-keep data-isin="{{ isin }}" data-call="{{ call }}" data-cur="{{ M.cur }}" data-index="{{ 'S&P 500' if IS_US else 'Nifty 50' }}" data-spike="{{ spike or '' }}">
   <div class="ph"><h2>{{ icon('chart', 16) }}Price</h2><div class="pc-read" aria-live="polite"></div></div>
   <div class="pc-ctrl"></div>
   <div class="pc-wrap"><div class="pc" role="img" aria-label="Price chart; hover or touch for each day's values"></div><div class="pc-tip" hidden></div></div>
+  <div class="pc2-head"><span>Volume vs usual</span><span class="faint">{% if spike %}line = your screen's spike rule ({{ spike|round(1) }}×){% else %}50-day average = 1×{% endif %}</span></div>
+  <div class="pc2" role="img" aria-label="Daily volume as a multiple of its usual level"></div>
   <div class="pc-foot"><div class="pc-legend"></div><span class="faint"><span class="pc-src"></span> · charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a></span></div>
 </section>
 {%- endmacro %}
 
 {# Yearly / quarterly results as bar charts (finbars.js), from a fundamentals dict #}
 {% macro fin(f) -%}
-{% set yrs = [] %}{% for a in (f.annual or [])[:6] %}{% set _ = yrs.append({'t': a.fy_end, 'sales': a.sales, 'net_profit': a.net_profit, 'operating_cash_flow': a.operating_cash_flow, 'free_cash_flow': a.free_cash_flow}) %}{% endfor %}
-{% set qs = [] %}{% for q in (f.quarters or [])[:8] %}{% set _ = qs.append({'t': q.quarter_end, 'sales': q.sales, 'net_profit': q.net_profit}) %}{% endfor %}
+{% set yrs = [] %}{% for a in (f.annual or [])[:6] %}{% set _ = yrs.append({'t': a.get('fy_end'), 'sales': a.get('sales'), 'net_profit': a.get('net_profit'), 'operating_cash_flow': a.get('operating_cash_flow'), 'free_cash_flow': a.get('free_cash_flow'), 'cash_ratio': a.get('cfo_to_profit_plus_dep_pct'), 'de': a.get('debt_to_equity'), 'cycle': a.get('cash_conversion_cycle_days')}) %}{% endfor %}
+{% set qs = [] %}{% for q in (f.quarters or [])[:8] %}{% set _ = qs.append({'t': q.get('quarter_end'), 'sales': q.get('sales'), 'net_profit': q.get('net_profit')}) %}{% endfor %}
 {% if yrs or qs %}
 <section class="panel fin" id="fin" data-keep data-fin='{{ {"year": yrs, "quarter": qs}|tojson }}' data-cur="{{ M.cur }}" data-unit="{{ M.unit_label }}">
   <div class="ph"><h2>{{ icon('chart', 16) }}Results</h2>
-    <div class="seg"><button type="button" data-v="year">Yearly</button><button type="button" data-v="quarter">Quarterly</button></div></div>
+    <div class="seg"><button type="button" data-v="year">Yearly</button><button type="button" data-v="quarter">Quarterly</button><button type="button" data-v="health">Health</button></div></div>
   <div class="fin-body"></div>
   <div class="fin-tip" hidden></div>
   <div class="panel-foot"><span class="faint small">{{ M.cur }} {{ M.unit_label }}{% if f.annual_source %} · {{ f.annual_source }}{% endif %} · tap a bar for its value</span></div>

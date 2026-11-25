@@ -25,7 +25,11 @@
 {% if run %}
 {% set fn = run.funnel or {} %}
 {% set total = fn.companies or 1 %}
+{% if fn.steps is defined and fn.steps is not none %}
+{% set steps = [(fn.companies or 0, 'companies'), (fn.matches or 0, 'match ' ~ fn.screen), (picks|length, 'sent to the council'), (run.models|length, 'AIs vote')] %}
+{% else %}
 {% set steps = [(fn.companies or 0, 'companies'), (run.spikes or 0, 'volume spikes'), (picks|length, 'pass filters'), (run.models|length, 'AIs vote')] %}
+{% endif %}
 <a class="panel funnel" href="{{ B }}/run/{{ run.id }}" aria-label="How the list was found">
   {% for n, label in steps %}
   {% set w = 100 if loop.first else ([[ (n / total) ** 0.35 * 100, 3]|max, 100]|min) %}

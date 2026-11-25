@@ -135,6 +135,35 @@
           }
         }
       ]
+    },
+    {
+      "name": "Evening screen choice sticks",
+      "steps": [
+        {
+          "goto": "/settings"
+        },
+        {
+          "click": "label:has(select[name=sched_screen]) .sel-btn"
+        },
+        {
+          "click": ".sel-pop:not([hidden]) .sel-opt:has-text('Quality at a fair price')"
+        },
+        {
+          "wait": 1800
+        },
+        {
+          "goto": "/"
+        },
+        {
+          "goto": "/settings"
+        },
+        {
+          "expectText": {
+            "selector": "label:has(select[name=sched_screen]) .sel-btn",
+            "text": "Quality at a fair price"
+          }
+        }
+      ]
     }
   ]
 }

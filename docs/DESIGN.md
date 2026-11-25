@@ -14,7 +14,7 @@ Read with `~/.claude/skills/design-principles/references/principles.md`. This fi
 - Save model: autosave everywhere (Settings, Screener edits on the server for everyone; broker order drafts in the browser per stock) with a visible status.
 - Actions: filled = does something (Screen, Save, Check, Run now, Ask the council, Open in Gmail); outline = secondary or navigation.
 - Navigation: India and US are the same site; switching keeps the section (Screener, History, Settings, ...); a stock or run page goes to that market's Today.
-- Missing values show "–" for now (open question: Parth's no-dash rule vs table convention).
+- Missing values show "–" in number slots (Parth approved this exception to the no-dash rule, 24 Nov 2026).
 
 ## Checks
 - `scripts/deploy.sh` runs `scripts/page_sweep.py` (both markets) and the UX check (`ux-check.json`) on a copy of the live data, then deploys and checks live. Never deploy around it.

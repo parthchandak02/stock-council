@@ -164,6 +164,68 @@
           }
         }
       ]
+    },
+    {
+      "name": "A new saved screen shows in the left list",
+      "viewport": "1440x900",
+      "steps": [
+        {
+          "goto": "/screener?preset=quality"
+        },
+        {
+          "click": "#savebtn"
+        },
+        {
+          "fill": "input[name=name][form=saveform]",
+          "value": "Check list"
+        },
+        {
+          "click": "#saveas"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "expectText": {
+            "selector": ".screens",
+            "text": "Check list"
+          }
+        },
+        {
+          "expectText": {
+            "selector": ".scr.on",
+            "text": "Check list"
+          }
+        }
+      ]
+    },
+    {
+      "name": "A new US saved screen shows in the left list",
+      "viewport": "390x844",
+      "steps": [
+        {
+          "goto": "/us/screener?preset=cash"
+        },
+        {
+          "click": "#savebtn"
+        },
+        {
+          "fill": "input[name=name][form=saveform]",
+          "value": "US check"
+        },
+        {
+          "click": "#saveas"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "expectText": {
+            "selector": ".screens",
+            "text": "US check"
+          }
+        }
+      ]
     }
   ]
 }

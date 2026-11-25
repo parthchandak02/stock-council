@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS universe (
 """
 NEW_COLS = ["opm REAL", "npm REAL", "interest_cover REAL", "q_sales_yoy REAL", "q_profit_yoy REAL",
             "div_yield REAL", "ev_ebitda REAL", "lender INTEGER",
-            "insiders REAL", "institutions REAL", "short_float REAL"]
+            "insiders REAL", "institutions REAL", "short_float REAL", "short_days REAL", "short_chg REAL"]
 LENDER_WORDS = ("bank", "credit services", "mortgage", "insurance - ", "financial conglomerate")
 
 
@@ -98,6 +98,10 @@ if IS_US:   # US ownership: no promoter/pledge; insiders, institutions and short
         "insiders": ("Insider holding", "Owners", "%", "Officers, directors, 10% owners"),
         "institutions": ("Institutional holding", "Owners", "%", "Funds and other institutions"),
         "short_float": ("Short interest", "Owners", "% float", "Shares sold short, % of float"),
+        "short_days": ("Days to cover", "Owners", "days", "Short position ÷ average daily volume"),
+        "short_chg": ("Short interest change, 1 mo", "Owners", "%", "This month's short position vs last month's"),
+        "insiders_chg": ("Insider holding change, 3 mo", "Owners", "pts", "From weekly snapshots since 25 Nov 2026; blank until 3 months of history"),
+        "institutions_chg": ("Institutional change, 3 mo", "Owners", "pts", "From weekly snapshots since 25 Nov 2026; blank until 3 months of history"),
     })
 
 PRESETS = [
@@ -123,6 +127,8 @@ if IS_US:   # the same ideas sized for the US ($ millions), plus US-flavoured on
          "rules": [["sales_cagr_3y", ">", 20], ["profit_cagr_3y", ">", 20], ["roe", ">", 12], ["mcap", ">", 300]]},
         {"id": "breakout", "name": "Near the high, with volume", "desc": "Within 5% of 52-week high on 2× volume",
          "rules": [["from_high", ">", -5], ["spike_x", ">", 2], ["mcap", ">", 300]]},
+        {"id": "cash", "name": "Cash machines", "desc": "Profit that turns into cash",
+         "rules": [["cfo_conv", ">", 90], ["fcf_neg_years", "<", 1], ["de", "<", 0.5], ["roe", ">", 15]]},
         {"id": "squeeze", "name": "Short squeeze watch", "desc": "Heavily shorted, volume surging",
          "rules": [["short_float", ">", 15], ["spike_x", ">", 2], ["mcap", ">", 300]]},
     ]
@@ -177,7 +183,7 @@ def _candidates_in(conn) -> pd.DataFrame:
 COLS = ["isin", "symbol", "bse_code", "yahoo", "name", "sector", "industry", "shares_cr", "ttm_profit", "ttm_sales",
         "equity", "roe", "roe_3y", "roce", "roa", "de", "sales_cagr_3y", "profit_cagr_3y", "cfo_conv", "fcf",
         "fcf_neg_years", "asset_turnover", "updated", "error", "opm", "npm", "interest_cover", "q_sales_yoy",
-        "q_profit_yoy", "div_yield", "ev_ebitda", "lender", "insiders", "institutions", "short_float"]
+        "q_profit_yoy", "div_yield", "ev_ebitda", "lender", "insiders", "institutions", "short_float", "short_days", "short_chg"]
 
 
 def _row(c: pd.Series, f: dict | None, err: str | None) -> tuple:
@@ -192,7 +198,7 @@ def _row(c: pd.Series, f: dict | None, err: str | None) -> tuple:
             a0.get("free_cash_flow"), neg if f else None, g("asset_turnover"), date.today().isoformat(), err,
             g("opm_pct"), g("npm_pct"), g("interest_cover"), g("q_sales_yoy_pct"), g("q_profit_yoy_pct"),
             g("div_yield_pct"), g("ev_ebitda"), int(is_lender(g("sector"), g("industry"))) if f else None,
-            g("insiders_pct"), g("institutions_pct"), g("short_pct_float"))
+            g("insiders_pct"), g("institutions_pct"), g("short_pct_float"), g("short_ratio_days"), g("short_chg_1m_pct"))
 
 
 def refresh(limit: int | None = None, max_age_days: int = 7, force: list[str] | None = None,
@@ -252,6 +258,8 @@ def refresh(limit: int | None = None, max_age_days: int = 7, force: list[str] | 
             if f:
                 cache_put(conn, f"fund:{c['yahoo']}", f)
             conn.commit()
+            if f and IS_US:
+                snapshot_owners(conn, c["isin"])
         stats["ok" if f else "failed"] += 1
         if i and i % 100 == 0:
             log.info("universe: %d/%d (%d failed)", i, len(todo), stats["failed"])
@@ -350,7 +358,7 @@ def table(conn) -> tuple[str, pd.DataFrame]:
     u = pd.read_sql_query("SELECT * FROM universe WHERE error IS NULL", conn).set_index("isin")
     df = u.join(pm, how="inner")
     if IS_US:
-        return today, _valuation(df)
+        return today, _owner_changes(conn, _valuation(df))
     try:
         from .ownership import db as _odb
         _odb()
@@ -362,6 +370,38 @@ def table(conn) -> tuple[str, pd.DataFrame]:
     except Exception as e:
         log.warning("ownership not joined: %s", e)
     return today, _valuation(df)
+
+
+OWNER_HIST = """CREATE TABLE IF NOT EXISTS owner_hist (
+    isin TEXT NOT NULL, day TEXT NOT NULL, insiders REAL, institutions REAL, short_float REAL,
+    PRIMARY KEY (isin, day))"""
+
+
+def snapshot_owners(conn, isin: str | None = None) -> int:
+    """US: keep a dated copy of each company's ownership so changes over time can be screened
+    (Yahoo only gives today's numbers). One row per company per day."""
+    ensure_schema(conn, "owner_hist", OWNER_HIST)
+    q = ("INSERT OR REPLACE INTO owner_hist SELECT isin, updated, insiders, institutions, short_float FROM universe "
+         "WHERE error IS NULL AND (insiders IS NOT NULL OR institutions IS NOT NULL)" + (" AND isin=?" if isin else ""))
+    n = conn.execute(q, (isin,) if isin else ()).rowcount
+    conn.commit()
+    return n
+
+
+def _owner_changes(conn, df: pd.DataFrame) -> pd.DataFrame:
+    """Insider and institutional holding change over ~3 months, in percentage points (US)."""
+    try:
+        ensure_schema(conn, "owner_hist", OWNER_HIST)
+        h = pd.read_sql_query(
+            "SELECT n.isin, n.insiders - o.insiders insiders_chg, n.institutions - o.institutions institutions_chg "
+            "FROM owner_hist n JOIN owner_hist o ON o.isin = n.isin "
+            "WHERE n.day = (SELECT max(day) FROM owner_hist x WHERE x.isin = n.isin) "
+            "AND o.day = (SELECT max(day) FROM owner_hist y WHERE y.isin = n.isin AND y.day <= date(n.day, '-84 days'))",
+            conn).set_index("isin")
+        return df.join(h, how="left")
+    except Exception:
+        df["insiders_chg"] = df["institutions_chg"] = float("nan")
+        return df
 
 
 def _valuation(df: pd.DataFrame) -> pd.DataFrame:

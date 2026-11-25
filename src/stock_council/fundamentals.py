@@ -152,7 +152,10 @@ def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = Fal
             ev_ebitda = round(ev, 1) if isinstance(ev, (int, float)) else None
             pct = lambda k: round(info[k] * 100, 2) if isinstance(info.get(k), (int, float)) else None
             owners = {"insiders_pct": pct("heldPercentInsiders"), "institutions_pct": pct("heldPercentInstitutions"),
-                      "short_pct_float": pct("shortPercentOfFloat"), "short_ratio_days": info.get("shortRatio")}
+                      "short_pct_float": pct("shortPercentOfFloat"), "short_ratio_days": info.get("shortRatio"),
+                      # this month's short position vs last month's: are short sellers adding or leaving?
+                      "short_chg_1m_pct": round((info["sharesShort"] / info["sharesShortPriorMonth"] - 1) * 100, 1)
+                      if isinstance(info.get("sharesShort"), (int, float)) and info.get("sharesShortPriorMonth") else None}
         except Exception:
             pass
     qs5 = [q["sales"] for q in quarters] if quarters else []

@@ -648,3 +648,5 @@ i.ln[style*="background"]{height:2px;border:0}
 .pc-read{white-space:nowrap;min-height:22px}
 .pc-tip em{font-style:normal;font:500 12px var(--mono);margin-left:6px}
 @media (max-width:540px){.pc-tip{min-width:0;width:200px;top:6px} .pc-read{font-size:14px} .pc-read span{font-size:12px}}
+.pc-tip>div span{white-space:nowrap}
+@media (max-width:540px){.pc-tip{width:228px}}

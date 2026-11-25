@@ -159,7 +159,7 @@
       const day = prev ? (b.c / prev.c - 1) * 100 : null;
       const rows = [
         ['Close' + (day == null ? '' : ` <em class="${day >= 0 ? 'pos' : 'neg'}">${sign(day)}</em>`), fmtP(b.c)],
-        ['Open', fmtP(b.o)], ['High · Low', `${fmtP(b.h)} · ${fmtP(b.l)}`],
+        ['Open', fmtP(b.o)], ['High', fmtP(b.h)], ['Low', fmtP(b.l)],
         ['Volume' + (b.x ? ` <em class="${b.x >= 4 ? 'warn' : 'faint'}">${b.x}× usual</em>` : ''), fmtV(b.v)],
       ];
       if (b.d != null) rows.push(['Delivered', b.d + '%']);

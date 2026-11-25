@@ -499,7 +499,7 @@ main>*,#live>*,.col>*,.settings>*{min-width:0}
   .scrlayout{grid-template-columns:1fr;gap:14px}
   .screens{position:static;border:0;background:transparent}
   .screens .ph{display:none}
-  .scrlist{flex-direction:row;overflow-x:auto;padding:0;gap:6px;scrollbar-width:none}
+  .scrlist{flex-direction:row;overflow-x:auto;padding:2px;gap:6px;scrollbar-width:none;border-radius:0!important;scroll-padding:2px}
   .scr{flex:none;border-color:var(--line);max-width:220px} .scr.on{border-color:var(--ink);background:var(--surf)}
   .scr span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .scrhead{display:none}
@@ -534,3 +534,5 @@ select{font:inherit;font-weight:500;font-size:14px;color:var(--ink);background:v
 ::view-transition-old(root),::view-transition-new(root){animation-duration:.12s}
 .top{view-transition-name:topbar}
 @media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}
+/* rows that scroll sideways keep a little room, so borders and focus rings are never cut off */
+.presets{padding:2px}

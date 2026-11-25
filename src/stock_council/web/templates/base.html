@@ -23,8 +23,8 @@
 <header class="top">
   <a class="brand" href="{{ B }}/"><img src="/icon.svg" alt="" width="26" height="26"><span class="name">Stock Council</span></a>
   <nav class="mkt" aria-label="Market">
-    <a href="/" class="{{ 'on' if not IS_US }}">{{ flag('in') }}India</a>
-    <a href="/us/" class="{{ 'on' if IS_US }}">{{ flag('us') }}US</a>
+    <a href="{{ market_href(request, 'in') }}" class="{{ 'on' if not IS_US }}">{{ flag('in') }}India</a>
+    <a href="{{ market_href(request, 'us') }}" class="{{ 'on' if IS_US }}">{{ flag('us') }}US</a>
   </nav>
   <nav class="tabs" aria-label="Main">
     <a href="{{ B }}/" class="{{ 'on' if nav == 'today' }}">{{ icon('today', 20) }}<span>Today</span></a>

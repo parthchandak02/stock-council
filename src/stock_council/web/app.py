@@ -122,6 +122,15 @@ def rules_qs(rules: list) -> str:
     return urlencode([(k, x) for m, o, v in rules for k, x in (("m", m), ("o", o), ("v", v))])
 
 
+def market_href(request, code: str) -> str:
+    """The same page in the other market (Screener -> Screener), or its Today page when there is no match
+    (a stock or run belongs to one market only)."""
+    section = request.url.path.strip("/").split("/")[0] if request else ""
+    section = section if section in ("screener", "how", "history", "track", "settings") else ""
+    return ("/us/" if code == "us" else "/") + section
+
+
+tpl.env.globals.update(market_href=market_href)
 tpl.env.globals.update(B=B, M=MARKET, IS_US=IS_US, BUILD=BUILD, show_costs=show_costs, funnel_steps=funnel_steps,
                        rules_qs=rules_qs)
 tpl.env.filters["usd"] = usd

@@ -17,6 +17,7 @@ urls += [f"/run/{r}" for (r,) in db.execute("select id from runs")]
 urls += [f"/run/{r}/live" for (r,) in db.execute("select id from runs")]
 urls += [f"/stock/{r}/{i}" for r, i in db.execute("select run_id, isin from picks")]
 urls += [f"/screener?preset={p['id']}" for p in universe.PRESETS]
+urls += [u for (i,) in db.execute("select distinct isin from picks") for u in (f"/company/{i}", f"/company/{i}/results", f"/chart/{i}?span=1y")]
 urls += [f"/screener?m={k}&o=>&v=1&from=preset:volume-shock" for k in universe.METRICS]
 bad = [(u, s) for u in urls if (s := c.get(u).status_code) >= 500]
 print(f"page sweep {mk}: {len(urls)} pages, {len(bad)} failing", bad[:10])

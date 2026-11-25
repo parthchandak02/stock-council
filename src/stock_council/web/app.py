@@ -146,6 +146,8 @@ def mcap(x) -> str:
 
 
 tpl.env.filters["mcap"] = mcap
+tpl.env.filters["f1"] = lambda x: None if x is None or x != x else f"{x:.1f}"
+tpl.env.filters["f2"] = lambda x: None if x is None or x != x else f"{x:.2f}"
 tpl.env.globals.update(group=lambda v: VOTE_GROUP.get(str(v or "").lower(), ""), short_name=short_name,
                        key_numbers=key_numbers,
                        FILTER_LABELS=FILTER_LABELS)
@@ -306,7 +308,17 @@ def home(request: Request):
         "WHERE r.kind='on_demand' ORDER BY r.id DESC LIMIT 6")]
     return tpl.TemplateResponse(request, "home.html", {
         "run": run, "picks": _picks(conn, run["id"]) if run else [], "running": _running(conn),
-        "checks": checks, "nav": "today", "track": _track_buys(conn), "avg_stock": _avg_stock()})
+        "checks": checks, "nav": "today", "track": _track_buys(conn), "avg_stock": _avg_stock(), "sparks": _sparks(conn)})
+
+
+def _sparks(conn) -> dict:
+    """isin -> 3-month closes, for the trend lines in lists (from the Screener's nightly price data)."""
+    try:
+        from ..universe import price_metrics
+        pm = price_metrics(conn)[1]
+        return pm["spark"].to_dict() if "spark" in pm else {}
+    except Exception:
+        return {}
 
 
 def _track_buys(conn) -> dict | None:
@@ -723,7 +735,8 @@ def track_page(request: Request):
     conn = db()
     df = calls(conn)
     rows = df.drop_duplicates(["isin", "day"]).to_dict("records") if not df.empty else []
-    return tpl.TemplateResponse(request, "track.html", {"rows": rows, "sum": summary(df),
+    rets = [abs(r["ret"]) for r in rows if isinstance(r.get("ret"), (int, float)) and r["ret"] == r["ret"]]
+    return tpl.TemplateResponse(request, "track.html", {"rows": rows, "sum": summary(df), "maxret": max(rets) if rets else 1,
                                                         "max_days": int(df["days"].max()) if rows else 0, "nav": "history"})
 
 
@@ -821,6 +834,77 @@ def holdings_api(symbol: str, bse: str = ""):
         return JSONResponse({"quarters": history(symbol.upper(), bse or None)})
     except Exception as e:
         return JSONResponse({"quarters": [], "error": str(e)[:200]}, status_code=502)
+
+
+def _company(conn, isin: str) -> dict | None:
+    row = conn.execute("SELECT max(date) d FROM daily WHERE isin=?", (isin,)).fetchone()
+    if not row or not row["d"]:
+        return None
+    from ..screen import identity
+    ident = identity(conn, isin, row["d"])
+    metrics = {}
+    try:
+        from ..universe import table
+        _, df = table(conn)
+        if isin in df.index:
+            metrics = {k: (None if v != v else v) for k, v in df.loc[isin].to_dict().items()
+                       if isinstance(v, (int, float)) or v is None}
+            metrics["sector"], metrics["industry"] = df.loc[isin].get("sector"), df.loc[isin].get("industry")
+    except Exception:
+        pass
+    return {"ident": ident, "m": metrics, "day": row["d"]}
+
+
+@app.get("/company/{isin}", response_class=HTMLResponse)
+def company(request: Request, isin: str):
+    """Any listed company: chart, key numbers, results, owners, peers, past council calls, Ask the council."""
+    conn = db()
+    c = _company(conn, isin)
+    if not c:
+        return page_404(request)
+    calls = [dict(r) | {"verdict": json.loads(r["verdict"]) if r["verdict"] else {}} for r in conn.execute(
+        "SELECT p.run_id, p.isin, p.verdict, p.price, r.day FROM picks p JOIN runs r ON r.id=p.run_id "
+        "WHERE p.isin=? AND p.status='done' ORDER BY r.id DESC LIMIT 10", (isin,))]
+    st = get_settings(conn)
+    return tpl.TemplateResponse(request, "company.html", {
+        "c": c["ident"], "m": c["m"], "day": c["day"], "calls": calls, "peers": peers(conn, isin),
+        "filters": st["filters"], "nav": "screener", "avg_stock": _avg_stock()})
+
+
+@app.get("/company/{isin}/results", response_class=HTMLResponse)
+def company_results(request: Request, isin: str):
+    """The Results panel, loaded after the page (it may need a fresh fetch from Yahoo)."""
+    conn = db()
+    c = _company(conn, isin)
+    if not c:
+        return HTMLResponse("", status_code=404)
+    from ..screen import get_fundamentals
+    try:
+        f = get_fundamentals(conn, c["ident"])
+        if IS_US:
+            from ..sec_financials import upgrade
+            f = upgrade(f, c["ident"].get("cik"))
+    except Exception:
+        return HTMLResponse('<section class="panel"><div class="pb muted small">No results published for this company.</div></section>')
+    return tpl.TemplateResponse(request, "_results.html", {"f": f})
+
+
+@app.get("/chart/{isin}")
+def chart_api(isin: str, span: str = "1y", call: str = ""):
+    """Price chart data. span: 1y (our own files: covers 1M..1Y) or 3y / 5y / max (Yahoo)."""
+    from .. import charts
+    conn = db()
+    if span in charts.LONG:
+        row = conn.execute("SELECT max(date) d FROM daily WHERE isin=?", (isin,)).fetchone()
+        if not row or not row["d"]:
+            return JSONResponse({"bars": []}, status_code=404)
+        from ..screen import identity
+        data = charts.yahoo(conn, identity(conn, isin, row["d"])["yahoo_symbol"], span)
+    else:
+        data = charts.ours(conn, isin, call or None)
+    data["index"] = charts.index(conn, span if span in charts.LONG else "1y")
+    data["call"] = call or None
+    return JSONResponse(data, headers={"cache-control": "private, max-age=600"})
 
 
 @app.get("/healthz")

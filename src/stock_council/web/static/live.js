@@ -12,7 +12,9 @@
       if (!next) return;
       const live = document.getElementById('live');
       const open = [...live.querySelectorAll('details[open][id]')].map(d => d.id);
+      const kept = [...live.querySelectorAll('[data-keep][id]')];   // charts stay as they are (no rebuild, no flicker)
       live.innerHTML = next.innerHTML;
+      kept.forEach(old => { const fresh = document.getElementById(old.id); if (fresh) fresh.replaceWith(old); });
       open.forEach(id => { const d = document.getElementById(id); if (d) d.open = true; });
       live.dispatchEvent(new Event('live:updated', {bubbles: true}));
       if (!next.dataset.poll) return;          // finished: final state shown, stop

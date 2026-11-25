@@ -62,3 +62,11 @@
 {% macro cost(x, label='') -%}
 {% if show_costs() and x is not none %}<span class="cost" title="What the AI calls cost">{{ label }}{{ x|usd }}</span>{% endif %}
 {%- endmacro %}
+
+{# 3-month trend as a tiny line (server-drawn): green if up over the period, red if down #}
+{% macro spark(vals, w=72, h=24) -%}
+{%- if vals and vals|length > 2 -%}
+{%- set lo = vals|min -%}{%- set hi = vals|max -%}{%- set sp = (hi - lo) or 1 -%}{%- set n = vals|length -%}
+<svg class="spark {{ 'up' if vals[-1] >= vals[0] else 'down' }}" viewBox="0 0 {{ w }} {{ h }}" width="{{ w }}" height="{{ h }}" aria-label="3-month trend: {{ '%+.1f'|format((vals[-1] / vals[0] - 1) * 100) }}%" role="img"><polyline points="{% for v in vals %}{{ '%.1f'|format(1 + loop.index0 * (w - 2) / (n - 1)) }},{{ '%.1f'|format(h - 2 - (v - lo) / sp * (h - 4)) }} {% endfor %}"/></svg>
+{%- endif -%}
+{%- endmacro %}

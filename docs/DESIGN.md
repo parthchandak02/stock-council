@@ -14,6 +14,8 @@ Read with `~/.claude/skills/design-principles/references/principles.md`. This fi
 - Save model: autosave everywhere (Settings, Screener edits on the server for everyone; broker order drafts in the browser per stock) with a visible status.
 - Actions: filled = does something (Screen, Save, Check, Run now, Ask the council, Open in Gmail); outline = secondary or navigation.
 - Navigation: India and US are the same site; switching keeps the section (Screener, History, Settings, ...); a stock or run page goes to that market's Today.
+- Charts (24 Nov 2026): interactive price chart on stock and company pages (Lightweight Charts: ranges 1M to Max, line or candles, 50/200-day averages, vs Nifty 50 / S&P 500, volume spikes, call day, hover readout); results as small bar charts; 3-month sparklines in Today and the Screener; return bars in Track record. See the skill's charts.md.
+- Company page (/company/<isin>): any listed stock, reached from Screener results and peers; Ask the council from there.
 - Missing values show "–" in number slots (Parth approved this exception to the no-dash rule, 24 Nov 2026).
 
 ## Checks

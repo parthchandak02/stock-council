@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, score, change, cost %}
+{% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, score, change, cost, spark %}
 {% block main %}
 {% for r in running %}
 <a class="live panel" href="{{ B }}/run/{{ r.id }}">
@@ -43,7 +43,7 @@
       {% for p in picks %}{% set s = p.sheet or {} %}
         <a class="pick" href="{{ B }}/stock/{{ run.id }}/{{ p.isin }}">
           <span class="nm"><b>{{ (p.name or p.symbol)|nice }}</b><span>{{ p.symbol }} · {{ p.price|inr }} {{ change(s.change_pct) }}{% if s.spike_x %} · vol {{ s.spike_x }}×{% endif %}</span></span>
-          {{ dots(p.opinions) }}{{ verdict(p.verdict) }}{{ score((p.verdict or {}).avg_score) }}{{ icon('chev', 16, 'chev') }}
+          <span class="hide-s">{{ spark(sparks.get(p.isin)) }}</span>{{ dots(p.opinions) }}{{ verdict(p.verdict) }}{{ score((p.verdict or {}).avg_score) }}{{ icon('chev', 16, 'chev') }}
         </a>
       {% else %}
         <div class="empty small muted">No stock passed every filter that day.</div>

@@ -2,26 +2,139 @@
   "base": "http://127.0.0.1:8398",
   "out": "cook/stills/ux",
   "errorText": "Something went wrong",
-  "routes": ["/", "/screener", "/how", "/history", "/track", "/settings", "/run/7", "/stock/7/INE702C01027",
-             "/us/", "/us/screener", "/us/history", "/us/settings", "/us/run/3", "/us/stock/2/NVDA"],
+  "routes": [
+    "/",
+    "/screener",
+    "/how",
+    "/history",
+    "/track",
+    "/settings",
+    "/run/7",
+    "/stock/7/INE702C01027",
+    "/us/company/NVDA",
+    "/company/INE702C01027",
+    "/us/",
+    "/us/screener",
+    "/us/history",
+    "/us/settings",
+    "/us/run/3",
+    "/us/stock/2/NVDA"
+  ],
   "flows": [
-    {"name": "Screener edit sticks after leaving", "steps": [
-      {"goto": "/screener?preset=quality"},
-      {"fill": "#rulelist .rule:first-child input.numv", "value": "17"},
-      {"wait": 1500},
-      {"goto": "/history"},
-      {"goto": "/screener?preset=quality"},
-      {"expectValue": {"selector": "#rulelist .rule:first-child input.numv", "value": "17"}}]},
-    {"name": "Settings change sticks after leaving", "steps": [
-      {"goto": "/settings"},
-      {"fill": "input[name=max_stocks]", "value": "17"},
-      {"wait": 1800},
-      {"goto": "/"},
-      {"goto": "/settings"},
-      {"expectValue": {"selector": "input[name=max_stocks]", "value": "17"}}]},
-    {"name": "Switching to US keeps the Screener", "steps": [
-      {"goto": "/screener"}, {"click": ".mkt a:has-text('US')"}, {"expectPath": "/us/screener"}]},
-    {"name": "Switching to India keeps History", "steps": [
-      {"goto": "/us/history"}, {"click": ".mkt a:has-text('India')"}, {"expectPath": "/history"}]}
+    {
+      "name": "Screener edit sticks after leaving",
+      "steps": [
+        {
+          "goto": "/screener?preset=quality"
+        },
+        {
+          "fill": "#rulelist .rule:first-child input.numv",
+          "value": "17"
+        },
+        {
+          "wait": 1500
+        },
+        {
+          "goto": "/history"
+        },
+        {
+          "goto": "/screener?preset=quality"
+        },
+        {
+          "expectValue": {
+            "selector": "#rulelist .rule:first-child input.numv",
+            "value": "17"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Settings change sticks after leaving",
+      "steps": [
+        {
+          "goto": "/settings"
+        },
+        {
+          "fill": "input[name=max_stocks]",
+          "value": "17"
+        },
+        {
+          "wait": 1800
+        },
+        {
+          "goto": "/"
+        },
+        {
+          "goto": "/settings"
+        },
+        {
+          "expectValue": {
+            "selector": "input[name=max_stocks]",
+            "value": "17"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Switching to US keeps the Screener",
+      "steps": [
+        {
+          "goto": "/screener"
+        },
+        {
+          "click": ".mkt a:has-text('US')"
+        },
+        {
+          "expectPath": "/us/screener"
+        }
+      ]
+    },
+    {
+      "name": "Switching to India keeps History",
+      "steps": [
+        {
+          "goto": "/us/history"
+        },
+        {
+          "click": ".mkt a:has-text('India')"
+        },
+        {
+          "expectPath": "/history"
+        }
+      ]
+    },
+    {
+      "name": "Chart range sticks",
+      "viewport": "1440x900",
+      "steps": [
+        {
+          "goto": "/stock/7/INE702C01027"
+        },
+        {
+          "wait": 1500
+        },
+        {
+          "click": "#pchart [data-r='1Y']"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "goto": "/history"
+        },
+        {
+          "goto": "/stock/7/INE702C01027"
+        },
+        {
+          "wait": 1500
+        },
+        {
+          "expectText": {
+            "selector": "#pchart .pc-range button.on",
+            "text": "1Y"
+          }
+        }
+      ]
+    }
   ]
 }

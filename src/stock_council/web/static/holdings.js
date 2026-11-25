@@ -53,7 +53,7 @@
     const step = W < 420 ? 3 : n > 8 && W < 760 ? 2 : 1;
     Q.forEach((q, i) => {
       if ((n - 1 - i) % step) return;
-      if (i !== n - 1 && x(n - 1) - x(i) < 52) return;   // keep the latest label readable
+      if (i !== n - 1 && x(n - 1) - x(i) < 72) return;   // keep the latest label readable
       const a = i === n - 1 ? 'end' : i === 0 ? 'start' : 'middle';
       svg += `<text x="${x(i)}" y="${H - 6}" class="ax" text-anchor="${a}">${qLabel(q).replace(' 20', " '")}</text>`;
     });

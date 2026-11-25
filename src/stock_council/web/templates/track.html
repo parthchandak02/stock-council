@@ -21,9 +21,10 @@
     <div class="ph"><h2>{{ icon('history', 16) }}Every call</h2><span class="r">{{ rows|length }}</span></div>
     <div class="rows">
     {% for r in rows %}
-      <a class="callrow" href="{{ B }}/stock/{{ r.run_id }}/{{ r.isin }}">
+      <a class="callrow" title="{{ (r.name or r.symbol)|nice }}: {{ '%+.1f'|format(r.ret) if r.ret == r.ret else 'no price' }}% since the call" href="{{ B }}/stock/{{ r.run_id }}/{{ r.isin }}">
         <span class="nm"><b>{{ (r.name or r.symbol)|nice }}</b><span>{{ r.day|day }} · {{ M.cur }}{{ '%.2f'|format(r.call_price) }} → {{ M.cur }}{{ '%.2f'|format(r.now) if r.now else '–' }}</span></span>
         {{ verdict({'call': r.call}) }}
+        <span class="dbar hide-s" aria-hidden="true">{% if r.ret == r.ret %}<i class="{{ 'pos' if r.ret >= 0 else 'neg' }}" style="{{ 'left' if r.ret >= 0 else 'right' }}:50%;width:{{ [r.ret|abs / (maxret or 1) * 50, 1]|max }}%"></i>{% endif %}</span>
         <b class="r {{ 'pos' if r.ret > 0 else 'neg' if r.ret < 0 }}">{{ '%+.1f'|format(r.ret) if r.ret == r.ret else '–' }}%</b>
         {{ icon('chev', 16, 'chev') }}
       </a>{% endfor %}

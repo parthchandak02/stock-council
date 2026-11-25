@@ -1,0 +1,88 @@
+{% extends "base.html" %}{% from "_ui.html" import icon, verdict, change, gauge %}{% from "_charts.html" import pchart %}
+{% block title %}{{ (c.name or c.nse_symbol)|nice }} · Stock Council{% endblock %}
+{% block main %}
+{% set sym = c.nse_symbol or c.bse_symbol %}
+{% macro tile(label, v, unit='', g=None) -%}
+<div><div class="lab"><span>{{ label }}</span></div>
+  <div class="val {{ 'word' if v is none }}">{{ '–' if v is none else v }}{% if unit and v is not none %}<small>{{ unit }}</small>{% endif %}</div>
+  {% if g %}{{ g }}{% endif %}</div>
+{%- endmacro %}
+<a class="back" href="{{ B }}/screener">{{ icon('back', 16) }}Screener</a>
+
+<section class="panel">
+  <div class="hdr">
+    <div>
+      <h1>{{ (c.name or sym)|nice }}</h1>
+      <div class="meta"><span>{{ M.id_label }}: {{ sym }}</span>{% if c.bse_code and not IS_US %}<span>BSE {{ c.bse_code }}</span>{% endif %}{% if m.sector %}<span>{{ m.sector }}</span>{% endif %}{% if m.mcap %}<span>{{ m.mcap|mcap }}</span>{% endif %}<span>{{ day|day }}</span></div>
+      <div class="price"><b>{{ c.close|inr }}</b>{{ change(m.change_1d) }}</div>
+    </div>
+    <form method="post" action="{{ B }}/check" class="askform">
+      <input type="hidden" name="symbol" value="{{ sym }}">
+      <button class="btn">{{ icon('council', 16) }}Ask the council</button>
+      <span class="faint small">{{ (calls|length ~ ' earlier call' ~ ('s' if calls|length != 1 else '')) if calls else 'no earlier calls' }}{% if show_costs() %} · about {{ (avg_stock or 0.08)|usd }}{% endif %}</span>
+    </form>
+  </div>
+</section>
+
+<div class="two">
+  <div class="col">
+    {{ pchart(c.isin, calls[0].day if calls else '') }}
+    <section class="panel">
+      <div class="ph"><h2>{{ icon('shield', 16) }}Key numbers</h2><span class="r">tick = Dad's limit</span></div>
+      <div class="grid">
+        {{ tile('P/E', (m.pe|f1), '', gauge(((m.pe or 0) / 60 * 100), 'good' if m.pe and m.pe < filters.max_pe else 'warn', filters.max_pe / 60 * 100, '0', 'limit ' ~ filters.max_pe|int) if m.pe else None) }}
+        {{ tile('ROE', (m.roe|f1), '%', gauge(((m.roe or 0) / 40 * 100), 'good' if m.roe and m.roe > filters.min_roe_pct else 'warn', filters.min_roe_pct / 40 * 100, '0', 'limit ' ~ filters.min_roe_pct|int ~ '%') if m.roe is not none else None) }}
+        {{ tile('Debt / equity', m.de|f2, '', gauge(((m.de or 0) / 1.5 * 100), 'good' if m.de is not none and m.de < filters.max_debt_to_equity else 'warn', filters.max_debt_to_equity / 1.5 * 100, '0', 'limit ' ~ filters.max_debt_to_equity) if m.de is not none and not m.lender else None) }}
+        {{ tile('ROCE', (m.roce|f1), '%') }}
+        {{ tile('Sales growth, 3 yr', (m.sales_cagr_3y|f1), '%/yr') }}
+        {{ tile('Profit growth, 3 yr', (m.profit_cagr_3y|f1), '%/yr') }}
+        {{ tile('P/B', m.pb|f2) }}
+        {{ tile('Dividend yield', (m.div_yield|f1), '%') }}
+        {{ tile('From 52-week high', (m.from_high|f1), '%') }}
+        {{ tile('1-year return', (m.ret_1y|f1), '%') }}
+        {{ tile('Volume vs usual', (m.spike_x|f1), '×') }}
+        {% if not IS_US %}{{ tile('Delivered today', (m.delivery|f1), '%') }}{% else %}{{ tile('Short interest', (m.short_float|f1), '% of float') }}{% endif %}
+      </div>
+    </section>
+    <div id="results-slot" data-src="{{ B }}/company/{{ c.isin }}/results"><section class="panel"><div class="pb muted small">{{ icon('spin', 14, 'spin') }} Loading yearly and quarterly results…</div></section></div>
+  </div>
+
+  <div class="col">
+    <section class="panel">
+      <div class="ph"><h2>{{ icon('council', 16) }}Council calls</h2><span class="r">{{ calls|length }}</span></div>
+      {% if calls %}<div class="rows">{% for k in calls %}
+        <a class="checked" href="{{ B }}/stock/{{ k.run_id }}/{{ k.isin }}"><span class="nm"><b>{{ k.day|day }}</b><span>at {{ k.price|inr }}</span></span>{{ verdict(k.verdict) }}<b class="mono" style="text-align:right;font-weight:500">{{ k.verdict.avg_score or '–' }}</b>{{ icon('chev', 16, 'chev') }}</a>
+      {% endfor %}</div>
+      {% else %}<div class="pb muted small">The council hasn't looked at this company yet. Ask it above.</div>{% endif %}
+    </section>
+    {% if not IS_US and c.nse_symbol %}
+    <section class="panel holdings" id="holdings" data-symbol="{{ c.nse_symbol }}" data-bse="{{ c.bse_code or '' }}">
+      <div class="ph hd-top"><h2>{{ icon('council', 16) }}Who owns it</h2>
+        <div class="seg" role="tablist"><button type="button" data-view="chart" class="on">Graph</button><button type="button" data-view="table">Table</button></div></div>
+      <div class="hd-body"><p class="muted small">{{ icon('spin', 14, 'spin') }} Reading 12 quarters of shareholding filings…</p></div>
+    </section>
+    {% endif %}
+  </div>
+</div>
+
+{% if peers and peers|length > 1 %}
+<section class="panel">
+  <div class="ph"><h2>{{ icon('council', 16) }}Same industry</h2><span class="r">{{ m.industry or peers[0].industry }}</span></div>
+  <div class="tblwrap"><table class="tbl peers">
+    <tr><th>Company</th><th>Mkt cap {{ M.cur }} {{ M.unit_label }}</th><th>P/E</th><th>ROE %</th><th>Sales growth %</th><th>1-yr return %</th></tr>
+    {% for q in peers %}<tr class="{{ 'me' if q.isin == c.isin }}"><td><a href="{{ B }}/company/{{ q.isin }}">{{ (q.name or q.symbol)|nice }}</a></td><td>{{ '{:,.0f}'.format(q.mcap) if q.mcap == q.mcap and q.mcap is not none else '–' }}</td><td>{{ '%.1f'|format(q.pe) if q.pe == q.pe and q.pe is not none else '–' }}</td><td>{{ '%.1f'|format(q.roe) if q.roe is not none and q.roe == q.roe else '–' }}</td><td>{{ '%.1f'|format(q.sales_cagr_3y) if q.sales_cagr_3y is not none and q.sales_cagr_3y == q.sales_cagr_3y else '–' }}</td><td class="{{ 'neg' if q.ret_1y is not none and q.ret_1y < 0 else 'pos' }}">{{ '%.1f'|format(q.ret_1y) if q.ret_1y is not none and q.ret_1y == q.ret_1y else '–' }}</td></tr>{% endfor %}
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/lightweight-charts-4.2.3.js"></script><script src="/static/pricechart.js?v={{ BUILD }}"></script>
+<script src="/static/finbars.js?v={{ BUILD }}"></script><script src="/static/holdings.js?v={{ BUILD }}"></script>
+<script>
+(async () => {   // results may need a fresh fetch: load them after the page
+  const slot = document.getElementById('results-slot');
+  try { const r = await fetch(slot.dataset.src); slot.innerHTML = await r.text(); window.finbars && window.finbars(slot.querySelector('#fin')); }
+  catch (e) { slot.innerHTML = '<section class="panel"><div class="pb muted small">Couldn\'t load results right now.</div></section>'; }
+})();
+</script>
+{% endblock %}

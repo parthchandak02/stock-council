@@ -268,7 +268,7 @@ def price_metrics(conn) -> tuple[str, pd.DataFrame]:
     from .config import DATA_DIR, MARKET
     day = conn.execute("SELECT max(date) FROM daily").fetchone()[0]
     rows = conn.execute("SELECT count(*) FROM daily WHERE date=?", (day,)).fetchone()[0]
-    latest = f"{day}-{rows}"     # prices still arriving for the day -> a new key, never a frozen half-day
+    latest = f"{day}-{rows}-v2"  # prices still arriving for the day -> a new key, never a frozen half-day
     if _pm_cache.get("day") == latest:
         return _pm_cache["val"]
     with _pm_lock:
@@ -331,6 +331,9 @@ def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
         "delivery": last["dq"] / last["vol"] * 100,
         "delivery_30d": (dq.tail(30).sum() / vol.tail(30).where(dq.tail(30).notna()).sum()) * 100,
     })
+    # 3-month trend for list sparklines: ~63 closes, thinned to 32 points
+    tail = close.tail(63)
+    out["spark"] = pd.Series({k: [round(float(x), 4) for x in tail[k].dropna().values[::2]] for k in tail.columns})
     out = out[out.index.isin(last.index)]
     return today, out
 

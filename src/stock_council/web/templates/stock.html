@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, ring, gauge, agree, change, tone_of, cost %}
+{% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, ring, gauge, agree, change, tone_of, cost %}{% from "_charts.html" import pchart, fin %}
 {% block title %}{{ p.name|nice }} · Stock Council{% endblock %}
 {% block main %}
 <div id="live" {% if p.status in ('news', 'council') %}data-poll="1"{% endif %} style="display:flex;flex-direction:column;gap:inherit">{% set s = p.sheet or {} %}{% set t = s.technicals or {} %}{% set v = p.verdict or {} %}{% set f = s.fundamentals or {} %}
@@ -39,26 +39,7 @@
 
 <div class="two">
   <div class="col">
-    {% if chart %}
-    <section class="panel pricechart">
-      <div class="ph"><h2>{{ icon('chart', 16) }}Price</h2><span class="r">1 year · split-adjusted</span></div>
-      <div class="pb">
-        <svg viewBox="0 0 {{ chart.W }} {{ chart.H }}" role="img" aria-label="One-year price chart, low {{ chart.lo }}, high {{ chart.hi }}">
-          <defs><linearGradient id="pg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--price)" stop-opacity=".22"/><stop offset="1" stop-color="var(--price)" stop-opacity="0"/></linearGradient></defs>
-          {% for yy, lbl in chart.ticks %}<line x1="{{ chart.L }}" x2="{{ chart.W - chart.R }}" y1="{{ yy }}" y2="{{ yy }}" stroke="var(--line)"/><text x="{{ chart.W - chart.R + 6 }}" y="{{ yy + 3.5 }}">{{ lbl }}</text>{% endfor %}
-          {% for xx, m in chart.months %}<text x="{{ xx }}" y="{{ chart.H - 4 }}" text-anchor="middle">{{ m }}</text>{% endfor %}
-          <path d="{{ chart.area }}" fill="url(#pg)"/>
-          <path d="{{ chart.path }}" fill="none" stroke="var(--price)" stroke-width="1.6" stroke-linejoin="round"/>
-          {% for xx, h, big in chart.bars %}<rect x="{{ '%.1f'|format(xx - 1) }}" y="{{ '%.1f'|format(chart.vol_b - h) }}" width="2" height="{{ '%.1f'|format(h) }}" fill="var(--{{ 'hold' if big else 'line2' }})"/>{% endfor %}
-          {% if chart.mark %}<line x1="{{ '%.1f'|format(chart.mark[0]) }}" x2="{{ '%.1f'|format(chart.mark[0]) }}" y1="{{ chart.T }}" y2="{{ chart.vol_b }}" stroke="var(--ink)" stroke-dasharray="3 3" opacity=".5"/>{% endif %}
-          <circle cx="{{ chart.last_x }}" cy="{{ chart.last_y }}" r="3.2" fill="var(--price)"/>
-          <rect x="{{ chart.W - chart.R + 2 }}" y="{{ chart.last_y - 9 }}" width="{{ chart.R - 2 }}" height="18" rx="3" fill="var(--price)"/>
-          <text x="{{ chart.W - chart.R + 6 }}" y="{{ chart.last_y + 4 }}" style="fill:var(--on-accent);font-weight:600">{{ '{:,.0f}'.format(chart.last) if chart.last >= 100 else '%.2f'|format(chart.last) }}</text>
-        </svg>
-        <div class="legend-row"><span><i class="sw bg-warn"></i>volume over 4× normal</span>{% if chart.mark %}<span><i class="sw" style="width:2px;height:12px;background:var(--ink)"></i>day of this call</span>{% endif %}<span class="mono">low {{ M.cur }}{{ chart.lo }} · high {{ M.cur }}{{ chart.hi }}</span></div>
-      </div>
-    </section>
-    {% endif %}
+    {{ pchart(p.isin, run.day) }}
 
     {% if not IS_US and p.status == 'done' %}
     <section class="panel holdings" id="holdings" data-symbol="{{ p.symbol }}" data-bse="{{ s.bse_code or '' }}">
@@ -107,6 +88,7 @@
       {% endfor %}
       </div>
     </section>
+    {{ fin(f) }}
   </div>
 
   <div class="col">
@@ -202,4 +184,4 @@
 </details>
 </div>
 {% endblock %}
-{% block scripts %}<script src="/static/live.js?v={{ BUILD }}"></script><script src="/static/order.js?v={{ BUILD }}"></script><script src="/static/holdings.js?v={{ BUILD }}"></script>{% endblock %}
+{% block scripts %}<script src="/static/vendor/lightweight-charts-4.2.3.js"></script><script src="/static/pricechart.js?v={{ BUILD }}"></script><script src="/static/finbars.js?v={{ BUILD }}"></script><script src="/static/live.js?v={{ BUILD }}"></script><script src="/static/order.js?v={{ BUILD }}"></script><script src="/static/holdings.js?v={{ BUILD }}"></script>{% endblock %}

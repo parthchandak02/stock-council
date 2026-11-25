@@ -645,3 +645,6 @@ i.ln[style*="background"]{height:2px;border:0}
 .pc-tip[hidden],.fin-tip[hidden]{display:none}
 .pc-tip{min-width:250px} .pc-tip b{flex:none} .pc-tip>div:not(.pc-tip-h){align-items:baseline}
 .pc-foot a{display:inline-block;padding:6px 2px;margin:-6px 0}
+.pc-read{white-space:nowrap;min-height:22px}
+.pc-tip em{font-style:normal;font:500 12px var(--mono);margin-left:6px}
+@media (max-width:540px){.pc-tip{min-width:0;width:200px;top:6px} .pc-read{font-size:14px} .pc-read span{font-size:12px}}

@@ -153,14 +153,14 @@
       const i = t && byTime.has(t) ? byTime.get(t) : bars.length - 1;
       const b = bars[i], first = bars[i0], prev = bars[i - 1];
       const ch = (b.c / first.c - 1) * 100;
-      read.innerHTML = `<b>${fmtP(b.c)}</b><span class="${ch >= 0 ? 'pos' : 'neg'}">${sign(ch)}</span><span class="faint">${t ? 'from ' + nice(first.t) + ' to ' + nice(b.t) : 'over ' + state.range}</span>`;
+      read.innerHTML = `<b>${fmtP(b.c)}</b><span class="${ch >= 0 ? 'pos' : 'neg'}">${sign(ch)}</span><span class="faint">${t ? 'since ' + short(first.t) : 'over ' + state.range}</span>`;
       if (!t) { tip.hidden = true; return; }
       const val = (arr) => { const p = (arr || []).find(x => x.t === b.t); return p ? p.v : null; };
       const day = prev ? (b.c / prev.c - 1) * 100 : null;
       const rows = [
-        ['Close', fmtP(b.c) + (day == null ? '' : ` <span class="${day >= 0 ? 'pos' : 'neg'}">${sign(day)}</span>`)],
-        ['Open · High · Low', `${fmtP(b.o)} · ${fmtP(b.h)} · ${fmtP(b.l)}`],
-        ['Volume', fmtV(b.v) + (b.x ? ` <span class="${b.x >= 4 ? 'warn' : 'faint'}">${b.x}× usual</span>` : '')],
+        ['Close' + (day == null ? '' : ` <em class="${day >= 0 ? 'pos' : 'neg'}">${sign(day)}</em>`), fmtP(b.c)],
+        ['Open', fmtP(b.o)], ['High · Low', `${fmtP(b.h)} · ${fmtP(b.l)}`],
+        ['Volume' + (b.x ? ` <em class="${b.x >= 4 ? 'warn' : 'faint'}">${b.x}× usual</em>` : ''), fmtV(b.v)],
       ];
       if (b.d != null) rows.push(['Delivered', b.d + '%']);
       if (state.ma50 && val(data.ma50) != null) rows.push(['<i class="ln s50"></i>50-day avg', fmtP(val(data.ma50))]);
@@ -172,6 +172,7 @@
       tip.innerHTML = `<div class="pc-tip-h">${nice(b.t, true)}</div>` + rows.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('');
       tip.hidden = false;
     }
+    const short = t => new Date(t + 'T00:00:00').toLocaleDateString(undefined, t.slice(0, 4) === bars[bars.length - 1].t.slice(0, 4) ? {day: 'numeric', month: 'short'} : {day: 'numeric', month: 'short', year: 'numeric'});
     const nice = (t, long) => new Date(t + 'T00:00:00').toLocaleDateString(undefined, long ? {weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'} : {day: 'numeric', month: 'short', year: 'numeric'});
     chart.subscribeCrosshairMove(p => {
       if (!p || !p.time || !p.point || p.point.x < 0) { readout(null); return; }

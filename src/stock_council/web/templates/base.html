@@ -26,6 +26,7 @@
     <a href="{{ market_href(request, 'in') }}" class="{{ 'on' if not IS_US }}">{{ flag('in') }}India</a>
     <a href="{{ market_href(request, 'us') }}" class="{{ 'on' if IS_US }}">{{ flag('us') }}US</a>
   </nav>
+  <button type="button" class="srch-btn" id="srch-btn" aria-label="Check any stock" aria-expanded="false" aria-controls="srch">{{ icon('search', 18) }}</button>
   <nav class="tabs" aria-label="Main">
     <a href="{{ B }}/" class="{{ 'on' if nav == 'today' }}">{{ icon('today', 20) }}<span>Today</span></a>
     <a href="{{ B }}/screener" class="{{ 'on' if nav == 'screener' }}">{{ icon('filter', 20) }}<span>Screener</span></a>
@@ -34,6 +35,10 @@
     <a href="{{ B }}/settings" class="{{ 'on' if nav == 'settings' }}">{{ icon('settings', 20) }}<span>Settings</span></a>
   </nav>
 </header>
+<form class="srch" id="srch" method="post" action="{{ B }}/check" autocomplete="off" hidden>
+  {{ icon('search', 16) }}<input name="symbol" id="srch-q" placeholder="{{ 'Any ticker, e.g. NVDA' if IS_US else 'Any NSE symbol, e.g. TCS' }}" required aria-label="Stock to check">
+  <button>Check</button>
+</form>
 <main>{% block main %}{% endblock %}</main>
 <footer class="foot">{{ flag('us' if IS_US else 'in') }} {{ M.name }} · facts from {{ "SEC filings and market data" if IS_US else "NSE and BSE filings" }} · opinions from AI models · not investment advice</footer>
 <script>window.B = "{{ B }}";</script>

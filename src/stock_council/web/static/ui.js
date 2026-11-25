@@ -120,3 +120,12 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => enhance());
   document.addEventListener('live:updated', e => enhance(e.target));
 })();
+
+// Top-bar search: the icon opens a one-line "check any stock" box; Escape or a second tap closes it.
+(function () {
+  const btn = document.getElementById('srch-btn'), box = document.getElementById('srch');
+  if (!btn || !box) return;
+  const set = open => { box.hidden = !open; btn.setAttribute('aria-expanded', open); if (open) document.getElementById('srch-q').focus(); };
+  btn.addEventListener('click', () => set(box.hidden));
+  box.addEventListener('keydown', e => { if (e.key === 'Escape') { set(false); btn.focus(); } });
+})();

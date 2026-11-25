@@ -9,63 +9,47 @@
 </a>
 {% endfor %}
 
-<div class="pagehead">
-  <div>
-    {% if run %}<h1>{{ picks|length }} stock{{ 's' if picks|length != 1 }} worth a look</h1>
-    <p>Screen of {{ run.day|day }}{% if run.finished %}, {{ M.close }} close{% endif %} {{ cost(run.cost_usd, '· AI cost ') }}</p>
-    {% else %}<h1>Today</h1><p>No screen yet</p>{% endif %}
+{% set groups = [('BUY', 'Buy', 'buy'), ('HOLD', 'Hold', 'hold'), ('NO CONSENSUS', 'Split', 'split'), ('SELL', 'Sell', 'sell')] %}
+{% set fn = (run.funnel if run else {}) or {} %}
+<section class="panel tonight">
+  <div class="tn-top">
+    <span class="faint">{% if run %}{{ run.day|day }}{% if fn.screen %} · {{ fn.screen }}{% endif %}{% else %}No screen yet{% endif %}</span>
+    {% if run %}<a class="tn-how" href="{{ B }}/run/{{ run.id }}">of {{ (fn.companies or 0)|num }} {{ icon('chev', 14) }}</a>{% endif %}
   </div>
-  <form class="ask" method="post" action="{{ B }}/check" autocomplete="off">
-    {{ icon('search', 16) }}
-    <input name="symbol" placeholder="{{ 'Any ticker, e.g. NVDA' if IS_US else 'Any NSE symbol' }}" required aria-label="Stock to check">
-    <button>Check</button>
-  </form>
-</div>
-
-{% if tl %}
-<section class="panel tl" id="tl" data-iana="{{ M.tz }}" data-last="{{ tl.last or '' }}" data-next="{{ tl.next or '' }}" data-close="{{ tl.close or '' }}"
-  data-picks="{{ (tl.last_picks ~ ' pick' ~ ('s' if tl.last_picks != 1 else '')) if tl.last_status == 'done' else (tl.last_status or '') }}" aria-label="Screen timeline">
-  <div class="tl-labs">
-    {% if tl.last %}<a class="tl-lab last" href="{{ B }}/run/{{ tl.last_run }}"><b>Last run</b><span></span></a>{% else %}<span class="tl-lab last"><b>Last run</b><span>none yet</span></span>{% endif %}
-    <span class="tl-lab next"><b>Next run</b><span>{{ tl.why or '' }}</span></span>
+  <h1 class="tn-big">{% if run %}{{ picks|length }} worth a look{% else %}Today{% endif %}</h1>
+  {% if run and picks %}
+  {% set cnt = namespace(b=0, h=0, x=0, s=0) %}
+  {% for p in picks %}{% set c = (p.verdict or {}).call %}{% if c == 'BUY' %}{% set cnt.b = cnt.b + 1 %}{% elif c == 'HOLD' %}{% set cnt.h = cnt.h + 1 %}{% elif c == 'SELL' %}{% set cnt.s = cnt.s + 1 %}{% else %}{% set cnt.x = cnt.x + 1 %}{% endif %}{% endfor %}
+  <div class="tn-seg" aria-hidden="true">{% for n, cls in [(cnt.b, 'good'), (cnt.h, 'warn'), (cnt.x, 'split'), (cnt.s, 'bad')] if n %}<i class="bg-{{ cls }}" style="flex:{{ n }}"></i>{% endfor %}</div>
+  <div class="tn-keys">{% for n, w in [(cnt.b, 'buy'), (cnt.h, 'hold'), (cnt.x, 'split'), (cnt.s, 'sell')] if n %}<span><b>{{ n }}</b> {{ w }}</span>{% endfor %}</div>
+  {% endif %}
+  {% if tl %}
+  <div class="tl compact" id="tl" data-iana="{{ M.tz }}" data-last="{{ tl.last or '' }}" data-next="{{ tl.next or '' }}" data-close="{{ tl.close or '' }}" aria-label="Screen timeline">
+    {% if tl.last %}<a class="tl-lab last" href="{{ B }}/run/{{ tl.last_run }}" title="Last run"><span></span></a>{% else %}<span class="tl-lab last"><span>no run yet</span></span>{% endif %}
+    <div class="tl-track"><i class="tl-fill"></i><i class="tl-close" hidden></i><i class="tl-now" title="Now"></i></div>
+    <span class="tl-lab next"><span>{{ tl.why or '' }}</span></span>
   </div>
-  <div class="tl-track"><i class="tl-fill"></i><i class="tl-tick" style="left:0"></i><i class="tl-close" hidden></i><i class="tl-now"></i><i class="tl-tick" style="left:100%"></i></div>
-  <div class="tl-nowrow"><span class="tl-lab now"><b>Now</b> <span></span></span></div>
-  <div class="tl-foot faint">{{ tl.tz }} time{% if tl.holiday_today %} · market holiday today{% endif %}{% if tl.close %}<span class="tl-closekey"> · <i class="tl-key"></i> market close</span>{% endif %}</div>
+  {% endif %}
 </section>
-{% endif %}
-
-{% if run %}
-{% set fn = run.funnel or {} %}
-{% set total = fn.companies or 1 %}
-{% if fn.steps is defined and fn.steps is not none %}
-{% set steps = [(fn.companies or 0, 'companies'), (fn.matches or 0, 'match ' ~ fn.screen), (picks|length, 'sent to the council'), (run.models|length, 'AIs vote')] %}
-{% else %}
-{% set steps = [(fn.companies or 0, 'companies'), (run.spikes or 0, 'volume spikes'), (picks|length, 'pass filters'), (run.models|length, 'AIs vote')] %}
-{% endif %}
-<a class="panel funnel" href="{{ B }}/run/{{ run.id }}" aria-label="How the list was found">
-  {% for n, label in steps %}
-  {% set w = 100 if loop.first else ([[ (n / total) ** 0.35 * 100, 3]|max, 100]|min) %}
-  <div><div class="lab"><span>{{ label }}</span>{% if loop.last %}{{ icon('chev', 14, 'chev') }}{% endif %}</div><div class="val">{{ n|num }}</div><div class="bar" style="width:{{ w }}%"></div></div>
-  {% endfor %}
-</a>
-{% endif %}
 
 <div class="two">
   <div class="col">
   {% if run %}
-    <section class="panel">
-      <div class="ph"><h2>{{ icon('council', 16) }}Council picks</h2><span class="r">each block is one AI's vote</span></div>
-      <div class="rows">
-      {% for p in picks %}{% set s = p.sheet or {} %}
-        <a class="pick" href="{{ B }}/stock/{{ run.id }}/{{ p.isin }}">
-          <span class="nm"><b>{{ (p.name or p.symbol)|nice }}</b><span>{{ p.symbol }} · {{ p.price|inr }} {{ change(s.change_pct) }}{% if s.spike_x %} · vol {{ s.spike_x }}×{% endif %}</span></span>
-          <span class="hide-s">{{ spark(sparks.get(p.isin)) }}</span>{{ dots(p.opinions) }}{{ verdict(p.verdict) }}{{ score((p.verdict or {}).avg_score) }}{{ icon('chev', 16, 'chev') }}
+    <section class="panel qlist">
+    {% for code, label, cls in groups %}{% set g = picks|selectattr('verdict')|selectattr('verdict.call', 'equalto', code)|list %}
+      {% if g %}<div class="grp {{ cls }}">{{ label }} <em>{{ g|length }}</em></div>
+      {% for p in g %}{% set s = p.sheet or {} %}{% set v = p.verdict or {} %}
+        <a class="prow" href="{{ B }}/stock/{{ run.id }}/{{ p.isin }}">
+          <span class="n">{{ (p.name or p.symbol)|nice }}</span>
+          <span class="m"><span class="mono">{{ p.price|inr }}</span>{{ change(s.change_pct) }}{{ dots(p.opinions) }}<span class="hide-s">{{ spark(sparks.get(p.isin), 64, 18) }}</span></span>
+          <span class="sc">{{ v.avg_score or '–' }}</span>
         </a>
-      {% else %}
-        <div class="empty small muted">No stock passed every filter that day.</div>
-      {% endfor %}
-      </div>
+      {% endfor %}{% endif %}
+    {% endfor %}
+    {% set other = picks|rejectattr('verdict')|list + picks|selectattr('verdict')|rejectattr('verdict.call', 'in', ['BUY', 'HOLD', 'NO CONSENSUS', 'SELL'])|list %}
+    {% if other %}<div class="grp">Not judged <em>{{ other|length }}</em></div>
+      {% for p in other %}<a class="prow" href="{{ B }}/stock/{{ run.id }}/{{ p.isin }}"><span class="n">{{ (p.name or p.symbol)|nice }}</span><span class="m faint">{{ p.status or 'failed' }}</span><span class="sc">–</span></a>{% endfor %}{% endif %}
+    {% if not picks %}<div class="empty small muted">No stock matched the screen that day.</div>{% endif %}
     </section>
   {% else %}
     <section class="panel empty">
@@ -78,29 +62,18 @@
   </div>
 
   <div class="col">
-    <section class="panel">
-      <div class="ph"><h2>{{ icon('search', 16) }}You checked</h2><span class="r">{{ checks|length }}</span></div>
-      {% if checks %}
-      <div class="rows">
-      {% for c in checks %}
-        <a class="checked" href="{{ B }}/run/{{ c.id }}">
-          <span class="nm"><b>{{ (c.name or c.symbol or '')|nice }}</b><span>{{ c.symbol }} · {{ c.day|day }}</span></span>
-          {% if c.status == 'running' %}<span class="chip none">{{ icon('spin', 13, 'spin') }}Working</span>{% elif c.status == 'failed' %}<span class="chip sell">Failed</span>{% else %}{{ verdict(c.verdict) }}{% endif %}
-          <b class="mono" style="text-align:right;font-weight:500">{{ c.verdict.avg_score or '–' }}</b>
-          {{ icon('chev', 16, 'chev') }}
+    <section class="panel qlist">
+      <div class="grp">You checked <em>{{ checks|length }}</em></div>
+      {% for c in checks %}{% set v = c.verdict or {} %}{% set k = {"BUY": "buy", "SELL": "sell", "HOLD": "hold", "NO CONSENSUS": "split"}.get(v.call, "") %}
+        <a class="prow" href="{{ B }}/run/{{ c.id }}">
+          <span class="n">{{ (c.name or c.symbol or '')|nice }}</span>
+          <span class="m">{% if c.status == 'running' %}<span>checking…</span>{% elif c.status == 'failed' %}<span class="bad">failed</span>{% else %}<span class="{{ {'buy':'good','sell':'bad','hold':'warn','split':'split'}.get(k, '') }}">{{ {"buy": "Buy", "sell": "Sell", "hold": "Hold", "split": "Split"}.get(k, "–") }}</span>{% endif %}<span>{{ c.day|day }}</span></span>
+          <span class="sc">{{ v.avg_score or '–' }}</span>
         </a>
-      {% endfor %}
-      </div>
-      {% else %}<div class="pb muted small">Type a {{ 'ticker' if IS_US else 'symbol' }} above to ask the council about any stock.</div>{% endif %}
+      {% else %}<p class="pb muted small">Tap the search icon to ask the council about any stock.</p>{% endfor %}
     </section>
     {% if track and track.n %}
-    <a class="panel" href="{{ B }}/track">
-      <div class="ph"><h2>{{ icon('target', 16) }}Track record</h2><span class="r">{{ track.n }} buy calls {{ icon('chev', 14, 'chev') }}</span></div>
-      <div class="grid c2">
-        <div><div class="lab"><span>Buy calls up</span></div><div class="val">{{ track.up }}<small>of {{ track.n }}</small></div><div class="gauge"><i class="bg-good" style="width:{{ (track.up / track.n * 100)|round(0) }}%"></i><u style="left:50%"></u></div></div>
-        <div><div class="lab"><span>Average move</span></div><div class="val {{ 'good' if track.avg > 0 else 'bad' if track.avg < 0 }}">{{ '%+.1f'|format(track.avg) }}<small>%</small></div><div class="hint">since each call</div></div>
-      </div>
-    </a>
+    <a class="panel quiet-link" href="{{ B }}/track"><span>Track record</span><span><b class="mono">{{ track.up }}/{{ track.n }}</b> buy calls up · <b class="mono {{ 'good' if track.avg > 0 else 'bad' if track.avg < 0 }}">{{ '%+.1f'|format(track.avg) }}%</b></span></a>
     {% endif %}
     <section class="panel">
       <form method="post" action="{{ B }}/screen" class="pb" style="display:flex;justify-content:space-between;align-items:center;gap:12px">

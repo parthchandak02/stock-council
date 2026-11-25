@@ -146,7 +146,7 @@
     {% if p.status == 'done' and not IS_US %}
     <section class="panel order" id="order"
       data-name="{{ (p.name or p.symbol)|nice }}" data-symbol="{{ p.symbol }}" data-isin="{{ p.isin }}" data-run="{{ run.id }}"
-      data-to="{{ broker.to }}" data-gmail="{{ broker.gmail }}">
+      data-to="{{ broker.to }}" data-gmail="{{ broker.gmail }}" data-label="{{ M.id_label }}">
       <div class="ph"><h2>{{ icon('mail', 16) }}Order to broker</h2>
         {% if broker.to and broker.accounts %}<div class="side" role="radiogroup" aria-label="Buy or sell">
           <label><input type="radio" name="side" value="buy" checked><span class="buy">GTT Buy</span></label>

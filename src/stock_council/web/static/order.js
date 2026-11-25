@@ -18,7 +18,7 @@
     const rows = [...lines.querySelectorAll('.line')].map(l => ({qty: l.querySelector('.q').value.trim(), price: l.querySelector('.p').value.trim()}))
       .filter(r => r.qty && r.price && +r.qty > 0 && +r.price > 0);
     const subject = `${d.name}..gtt ${side} ${account}`;
-    const text = [`${d.name} (NSE: ${d.symbol})`, ...rows.map(r => `${r.qty}x ${r.price}`)].join('\n');
+    const text = [`${d.name} (${d.label || "NSE"}: ${d.symbol})`, ...rows.map(r => `${r.qty}x ${r.price}`)].join('\n');
     return {side, account, rows, subject, text};
   }
   function render() {

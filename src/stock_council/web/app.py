@@ -45,6 +45,10 @@ async def _cache_static(request: Request, call_next):
     return resp
 tpl = Jinja2Templates(directory=HERE / "templates")
 tpl.env.filters["md"] = lambda s: markdown.markdown(s or "", extensions=["tables"])
+# A value that isn't there at all (a failed stock has no fact sheet) counts as "none" in every template check,
+# so `x is not none` guards it the same way as an empty value.
+from jinja2 import Undefined as _Undefined
+tpl.env.tests["none"] = lambda x: x is None or isinstance(x, _Undefined)
 _C = MARKET["cur"]
 tpl.env.filters["inr"] = lambda x: "-" if x is None else f"{_C}{x:,.2f}" if x < 1000 else f"{_C}{x:,.0f}"
 tpl.env.filters["nice"] = nice_name
@@ -192,16 +196,41 @@ if not IS_US:
         return Response(r.content, status_code=r.status_code, headers=out)
 
 
-@app.exception_handler(Exception)
-async def _crash(request: Request, exc: Exception):
-    """Never a bare 'Internal Server Error': log it, and show a page with a way back."""
-    import logging
-    logging.getLogger("stock_council.web").exception("page failed: %s", request.url.path)
-    if request.url.path.startswith(("/holdings/", "/version", "/screener/draft", "/orders")):
-        return JSONResponse({"ok": False, "error": "server error"}, status_code=500)
-    return tpl.TemplateResponse(request, "message.html", {
-        "title": "Something went wrong", "text": "This page hit an error. It has been logged; try again in a minute."},
-        status_code=500)
+_JSON_PATHS = ("/holdings/", "/version", "/screener/draft", "/orders", "/healthz")
+
+
+def _friendly(request: Request, status: int, title: str, text: str):
+    if request.url.path.startswith(_JSON_PATHS):
+        return JSONResponse({"ok": False, "error": title}, status_code=status)
+    return tpl.TemplateResponse(request, "message.html", {"title": title, "text": text}, status_code=status)
+
+
+@app.middleware("http")
+async def _crash(request: Request, call_next):
+    """Never a bare 'Internal Server Error': log it and show a page with a way back. Handled here (not with an
+    exception handler) so the connection stays healthy for the next request."""
+    try:
+        return await call_next(request)
+    except Exception:
+        import logging
+        logging.getLogger("stock_council.web").exception("page failed: %s", request.url.path)
+        return _friendly(request, 500, "Something went wrong", "This page hit an error. It has been logged; try again in a minute.")
+
+
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_error(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        return _friendly(request, 404, "Not found", "That page doesn't exist.")
+    return _friendly(request, exc.status_code, "Can't do that", str(exc.detail))
+
+
+@app.exception_handler(RequestValidationError)
+async def _bad_input(request: Request, exc: RequestValidationError):
+    return _friendly(request, 400, "Not found", "That link doesn't point to anything.")
 
 
 @app.get("/manifest.webmanifest")
@@ -349,10 +378,19 @@ def _orders(isin: str | None = None, limit: int = 50) -> list[dict]:
 
 @app.post("/orders")
 async def save_order(request: Request):
-    d = await request.json()
-    lines = [{"qty": int(l["qty"]), "price": float(l["price"])} for l in d.get("lines", [])
-             if str(l.get("qty", "")).strip() and str(l.get("price", "")).strip()]
-    if d.get("side") not in ("buy", "sell") or not lines:
+    import math
+    try:
+        d = await request.json()
+        raw = d.get("lines") if isinstance(d, dict) else None
+        lines = []
+        for l in raw if isinstance(raw, list) else []:
+            q, pr = float(str(l.get("qty", "")).strip()), float(str(l.get("price", "")).strip())
+            if not (math.isfinite(q) and math.isfinite(pr)) or q <= 0 or pr <= 0:
+                raise ValueError
+            lines.append({"qty": int(q) if q == int(q) else q, "price": pr})
+    except (ValueError, TypeError, AttributeError):
+        return JSONResponse({"ok": False, "error": "bad order"}, status_code=400)
+    if not isinstance(d, dict) or d.get("side") not in ("buy", "sell") or not lines:
         return JSONResponse({"ok": False}, status_code=400)
     oid = log_order(d.get("run_id"), d.get("isin"), d.get("symbol"), d.get("name"), d["side"],
                     d.get("account"), lines, d.get("subject"))
@@ -445,14 +483,24 @@ async def save_settings(request: Request):
     if form.get("reset") == "prompt":
         save_setting(conn, "prompt", DEFAULT_PROMPT)
         return RedirectResponse(B + "/settings?saved=prompt", status_code=303)
-    filters = {}
-    for k, default in DEFAULT_FILTERS.items():
+    import math
+    import re as _re
+
+    def num(x, default):
         try:
-            filters[k] = type(default)(float(form.get(k, default)))
+            v = float(x)
+            return v if math.isfinite(v) else default
         except (TypeError, ValueError):
-            filters[k] = default
-    save_setting(conn, "filters", filters)
-    save_setting(conn, "prompt", (form.get("prompt") or "").strip() or DEFAULT_PROMPT)
+            return default
+    current = get_settings(conn)
+    if any(k in form for k in DEFAULT_FILTERS):        # only fields the form actually sent are changed
+        filters = dict(current["filters"])
+        for k, default in DEFAULT_FILTERS.items():
+            if k in form:
+                filters[k] = type(default)(num(form.get(k), filters.get(k, default)))
+        save_setting(conn, "filters", filters)
+    if "prompt" in form:
+        save_setting(conn, "prompt", (form.get("prompt") or "").strip() or DEFAULT_PROMPT)
     if "cm_model" in form:
         models = []
         for name, model, effort, on in zip(form.getlist("cm_name"), form.getlist("cm_model"), form.getlist("cm_effort"),
@@ -467,10 +515,12 @@ async def save_settings(request: Request):
             save_setting(conn, "thinking", form["thinking"])
     sent = []
     if "sched_time" in form:
+        t = form.get("sched_time") or ""
         save_setting(conn, "schedule", {
-            "enabled": form.get("sched_on") == "1", "time": form.get("sched_time") or "20:15",
-            "days": sorted(int(d) for d in form.getlist("sched_days") if d.isdigit()),
-            "max_stocks": max(1, min(30, int(float(form.get("max_stocks") or 20))))})
+            "enabled": form.get("sched_on") == "1",
+            "time": t if _re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t) else current["schedule"]["time"],
+            "days": sorted({int(d) for d in form.getlist("sched_days") if d.isdigit() and int(d) <= 6}),
+            "max_stocks": max(1, min(30, int(num(form.get("max_stocks"), current["schedule"]["max_stocks"]))))})
         split = lambda s: [x.strip() for x in (s or "").replace("\n", ",").split(",") if "@" in x]
         to, cc = split(form.get("email_to")), split(form.get("email_cc"))
         save_setting(conn, "email", {"enabled": form.get("email_on") == "1", "to": to, "cc": cc})
@@ -505,9 +555,11 @@ def _rules_from(params) -> list:
                 rules.append([m, o, v])       # compare with another measure
             continue
         try:
-            rules.append([m, o, float(v)])
+            x = float(v)
         except ValueError:
-            pass
+            continue
+        if x == x and abs(x) != float("inf"):     # no nan / inf: they'd filter silently behind a blank box
+            rules.append([m, o, x])
     return rules
 
 
@@ -549,7 +601,7 @@ def screener(request: Request):
         else:
             state["edits"].pop(key, None)
     else:
-        rules = state["edits"].get(key) or active["rules"]
+        rules = state["edits"][key] if key in state["edits"] else active["rules"]
     rules = [r for r in rules if r[0] in METRICS and not (isinstance(r[2], str) and r[2][1:] not in METRICS)]
     state["last"] = key
     save_setting(conn, "screener_state", state)
@@ -576,10 +628,10 @@ async def screener_draft(request: Request):
     if not base:
         return JSONResponse({"ok": False}, status_code=400)
     rules = _rules_from(form)
-    if rules and rules != base["rules"]:
-        state["edits"][base["key"]] = rules
-    elif rules == base["rules"]:
+    if rules == base["rules"]:
         state["edits"].pop(base["key"], None)
+    else:
+        state["edits"][base["key"]] = rules       # an empty list too: every rule removed on purpose
     state["last"] = base["key"]
     save_setting(conn, "screener_state", state)
     return {"ok": True, "edited": base["key"] in state["edits"]}

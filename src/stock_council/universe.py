@@ -264,7 +264,9 @@ def price_metrics(conn) -> tuple[str, pd.DataFrame]:
     right after the day's prices land), and behind a lock (visitors wait for the one build in progress
     instead of each starting their own)."""
     from .config import DATA_DIR, MARKET
-    latest = conn.execute("SELECT max(date) FROM daily").fetchone()[0]
+    day = conn.execute("SELECT max(date) FROM daily").fetchone()[0]
+    rows = conn.execute("SELECT count(*) FROM daily WHERE date=?", (day,)).fetchone()[0]
+    latest = f"{day}-{rows}"     # prices still arriving for the day -> a new key, never a frozen half-day
     if _pm_cache.get("day") == latest:
         return _pm_cache["val"]
     with _pm_lock:
@@ -336,7 +338,7 @@ def table(conn) -> tuple[str, pd.DataFrame]:
     u = pd.read_sql_query("SELECT * FROM universe WHERE error IS NULL", conn).set_index("isin")
     df = u.join(pm, how="inner")
     if IS_US:
-        return today, df
+        return today, _valuation(df)
     try:
         from .ownership import db as _odb
         _odb()
@@ -347,11 +349,16 @@ def table(conn) -> tuple[str, pd.DataFrame]:
         df["funds_chg"] = df["funds"] - (df["fii_1y"] + df["dii_1y"])
     except Exception as e:
         log.warning("ownership not joined: %s", e)
+    return today, _valuation(df)
+
+
+def _valuation(df: pd.DataFrame) -> pd.DataFrame:
+    """Market cap and price ratios from today's price (both markets)."""
     df["mcap"] = df["price"] * df["shares_cr"]
     df["pe"] = np.where(df["ttm_profit"] > 0, df["mcap"] / df["ttm_profit"], np.nan)
     df["pb"] = np.where(df["equity"] > 0, df["mcap"] / df["equity"], np.nan)
     df["peg"] = np.where((df["profit_cagr_3y"] > 0) & df["pe"].notna(), df["pe"] / df["profit_cagr_3y"], np.nan)
-    return today, df
+    return df
 
 
 def run_rules(rules: list, conn=None, limit: int = 200) -> dict:
@@ -374,7 +381,9 @@ def run_rules(rules: list, conn=None, limit: int = 200) -> dict:
         mask &= cond
     hits = df[mask].copy()
     sort_key = next((k for k, _, _ in rules if k == "spike_x"), "mcap")
-    hits = hits.sort_values(sort_key, ascending=False).head(limit)
+    if sort_key in hits.columns:
+        hits = hits.sort_values(sort_key, ascending=False)
+    hits = hits.head(limit)
     newest = conn.execute("SELECT max(updated), min(updated), count(*) FROM universe").fetchone()
     return {"day": today, "universe": total, "hits": hits.reset_index().to_dict("records"),
             "fund_updated": newest[0], "fund_oldest": newest[1], "fund_count": newest[2]}

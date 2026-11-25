@@ -192,6 +192,18 @@ if not IS_US:
         return Response(r.content, status_code=r.status_code, headers=out)
 
 
+@app.exception_handler(Exception)
+async def _crash(request: Request, exc: Exception):
+    """Never a bare 'Internal Server Error': log it, and show a page with a way back."""
+    import logging
+    logging.getLogger("stock_council.web").exception("page failed: %s", request.url.path)
+    if request.url.path.startswith(("/holdings/", "/version", "/screener/draft", "/orders")):
+        return JSONResponse({"ok": False, "error": "server error"}, status_code=500)
+    return tpl.TemplateResponse(request, "message.html", {
+        "title": "Something went wrong", "text": "This page hit an error. It has been logged; try again in a minute."},
+        status_code=500)
+
+
 @app.get("/manifest.webmanifest")
 def manifest():
     return JSONResponse(MANIFEST, media_type="application/manifest+json",

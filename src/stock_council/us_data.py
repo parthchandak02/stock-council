@@ -22,6 +22,17 @@ from .store import connect, ensure_schema
 log = logging.getLogger(__name__)
 
 SEC_UA = "Stock Council screen@parthchandak.info"   # SEC asks every client to identify itself
+_sec_lock = __import__("threading").Lock()
+_sec_last = [0.0]
+
+
+def sec_wait() -> None:
+    """One pace for every thread: SEC allows 10 requests a second; we keep to ~7."""
+    with _sec_lock:
+        gap = 0.14 - (time.monotonic() - _sec_last[0])
+        if gap > 0:
+            time.sleep(gap)
+        _sec_last[0] = time.monotonic()
 NASDAQ_LISTED = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
 OTHER_LISTED = "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
 SEC_TICKERS = "https://www.sec.gov/files/company_tickers_exchange.json"
@@ -92,8 +103,11 @@ def refresh_symbols() -> int:
     return len(rows)
 
 
-def _store(conn, data: pd.DataFrame, meta: dict[str, tuple]) -> int:
-    """data: yfinance multi-ticker frame (columns level 0 = ticker)."""
+def _store(conn, data: pd.DataFrame, meta: dict[str, tuple], overlap: bool = False, resync: set | None = None) -> int:
+    """data: yfinance multi-ticker frame (columns level 0 = ticker).
+    overlap=True (evening top-up): the first day is already stored and only used as a check. Yahoo's prices
+    are split-adjusted, so if that day's close no longer matches what we stored, the company split: its
+    ticker goes into `resync` for a full re-download instead of mixing old and new price scales."""
     from .config import market_now
     now = market_now()
     # today's bar only once the close is in (4 pm ET + a margin for the final prints)
@@ -106,6 +120,15 @@ def _store(conn, data: pd.DataFrame, meta: dict[str, tuple]) -> int:
             continue
         sym, name, ex, cik = meta[yt]
         prev = df["Close"].shift(1)
+        if overlap and len(df) > 1:
+            d0 = df.index[0].date().isoformat()
+            old = conn.execute("SELECT close FROM daily WHERE date=? AND exch='US' AND isin=?", (d0, sym)).fetchone()
+            new = _f(df["Close"].iloc[0])
+            if old and old[0] and new and abs(new / old[0] - 1) > 0.02:
+                if resync is not None:
+                    resync.add(yt)
+                continue
+            df, prev = df.iloc[1:], prev.iloc[1:]     # the check day: keep the stored row (and its prev close)
         df = df[[d.date() < cutoff for d in df.index]]   # never store an unfinished trading day
         prev = prev.loc[df.index]
         rows = [(d.date().isoformat(), "US", sym, sym, cik, ex, name,
@@ -142,6 +165,7 @@ def fetch_prices(period: str = "10d", chunk: int = 80, pause: float = 2.5, ticke
             if tickers is None or r["ticker"] in tickers}
     ys = list(meta)
     stored, empty_chunks = 0, 0
+    resync: set = set()
     for i in range(0, len(ys), chunk):
         part = ys[i:i + chunk]
         for attempt in range(3):
@@ -154,7 +178,7 @@ def fetch_prices(period: str = "10d", chunk: int = 80, pause: float = 2.5, ticke
                 time.sleep(20 * (attempt + 1))
         else:
             continue
-        got = _store(conn, data, meta) if not data.empty else 0
+        got = _store(conn, data, meta, overlap=period != "1y", resync=resync) if not data.empty else 0
         stored += got
         empty_chunks = empty_chunks + 1 if got == 0 else 0
         if empty_chunks >= 3:          # Yahoo throttling: back off hard
@@ -164,13 +188,44 @@ def fetch_prices(period: str = "10d", chunk: int = 80, pause: float = 2.5, ticke
         if i and i % (chunk * 10) == 0:
             log.info("prices: %d/%d tickers", i, len(ys))
         time.sleep(pause)
-    return {"tickers": len(ys), "rows": stored}
+    if resync:   # splits: a fresh year of split-adjusted bars for just these tickers
+        log.info("prices: %d tickers changed scale (split), re-downloading a year", len(resync))
+        part = sorted(resync)
+        for i in range(0, len(part), chunk):
+            try:
+                data = yf.download(part[i:i + chunk], period="1y", interval="1d", auto_adjust=False, group_by="ticker",
+                                   threads=False, progress=False)
+                if not data.empty:
+                    syms = [meta[y][0] for y in part[i:i + chunk]]
+                    conn.executemany("DELETE FROM daily WHERE exch='US' AND isin=?", [(x,) for x in syms])
+                    stored += _store(conn, data, meta)
+            except Exception as e:
+                log.warning("split re-download failed: %s", e)
+            time.sleep(pause)
+    return {"tickers": len(ys), "rows": stored, "resynced": len(resync)}
 
 
 def update(history_days: int = 10, **_) -> dict:
     """Evening refresh. First run (empty table) backfills a year."""
     conn = db()
     have = conn.execute("SELECT count(DISTINCT date) FROM daily WHERE exch='US'").fetchone()[0]
+    if have >= 200 and not _traded_today():
+        return {"skipped": "no US trading bar for today yet (holiday or before the close)"}
     if date.today().weekday() == 0 or not conn.execute("SELECT 1 FROM us_symbols LIMIT 1").fetchone():
         refresh_symbols()   # new listings / delistings, weekly
-    return fetch_prices(period="1y" if have < 200 else f"{max(history_days, 5)}d")
+    # one extra day: the first day of the window is only a check against what is stored (see _store)
+    return fetch_prices(period="1y" if have < 200 else f"{max(history_days, 5) + 1}d")
+
+
+def _traded_today() -> bool:
+    """Cheap check before downloading 5,800 tickers: do three big names have today's closing bar?"""
+    from .config import market_now
+    import yfinance as yf
+    now = market_now()
+    if (now.hour, now.minute) < (16, 30):
+        return False
+    try:
+        d = yf.download(["SPY", "AAPL", "MSFT"], period="5d", interval="1d", progress=False, threads=False)
+        return not d.empty and max(i.date() for i in d.index) >= now.date()
+    except Exception:
+        return True    # can't tell: do the normal download

@@ -136,7 +136,7 @@ def check(f: dict, filters: dict) -> list[str]:
     if pe is None or pe >= filters["max_pe"]:
         fails.append(f"P/E {pe} ≥ {filters['max_pe']}" if pe is not None else "P/E n/a (loss)")
     if roe is None or roe <= filters["min_roe_pct"]:
-        fails.append(f"ROE {roe}% ≤ {filters['min_roe_pct']}%")
+        fails.append(f"ROE {roe}% ≤ {filters['min_roe_pct']}%" if roe is not None else "ROE n/a")
     if not f.get("lender") and (de is None or de >= filters["max_debt_to_equity"]):  # not for banks/NBFCs
         fails.append(f"D/E {de} ≥ {filters['max_debt_to_equity']}")
     return fails

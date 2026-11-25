@@ -32,6 +32,8 @@ def technicals(conn, isin: str) -> dict:
         f"MAX(CASE WHEN exch='{PRIMARY_EXCH}' THEN close END) nse_close, MAX(CASE WHEN exch='BSE' THEN close END) bse_close "
         f"FROM daily WHERE isin IN ({','.join('?' * len(ids))}) GROUP BY date ORDER BY date", conn, params=ids)
     from .actions import adjust
+    for c in ("vol", "deliv", "nse_close", "bse_close"):   # an exchange with no rows reads as None objects
+        df[c] = pd.to_numeric(df[c], errors="coerce").astype(float)
     df["isin"] = isin
     df = adjust(df, conn, price_cols=("nse_close", "bse_close"), volume_cols=("vol", "deliv"))
     df["close"] = df["nse_close"].fillna(df["bse_close"])

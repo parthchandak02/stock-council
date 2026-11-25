@@ -25,7 +25,7 @@
     <section class="panel">
       <div class="ph"><h2>{{ (p.name or p.symbol)|nice }} <span class="mono faint" style="font-weight:400;font-size:12px">{{ p.symbol }}</span></h2>
         <span class="r">{% if st == 'done' %}{{ verdict(p.verdict) }} <span>{{ (p.verdict or {}).avg_score }}</span>{% elif st == 'error' %}<span class="chip sell">Failed</span>{% else %}<span class="chip none">{{ icon('spin', 13, 'spin') }}{{ {'queued':'Waiting','facts':'Fact sheet','news':'News search','council':'Voting'}.get(st, st) }}</span>{% endif %}
-        {% if show_costs() %}{{ cost((p.opinions or [])|selectattr('cost')|sum(attribute='cost') + ((p.news or {}).cost or 0)) if p.opinions else '' }}{% endif %}</span></div>
+        {% if show_costs() %}{{ cost((p.opinions or [])|selectattr('cost')|sum(attribute='cost') + ((p.news or {}).get('cost') or 0)) if p.opinions else '' }}{% endif %}</span></div>
       {% if st in ('council', 'done') or p.opinions %}
       <div class="pb"><div class="slots">
         {% set ops = p.opinions or [] %}{% if not ops %}{% set ops = [] %}{% for m in run.models %}{% set _ = ops.append({'name': m.name, 'pending': True}) %}{% endfor %}{% endif %}

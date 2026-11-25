@@ -511,7 +511,7 @@ def _rules_from(params) -> list:
     return rules
 
 
-DEFAULT_COLS = ["price", "change_1d", "mcap", "pe", "roe", "de", "spike_x", "delivery"]
+DEFAULT_COLS = [k for k in ["price", "change_1d", "mcap", "pe", "roe", "de", "spike_x", "delivery"] if k in METRICS]
 
 
 def _screen_state(conn) -> dict:
@@ -550,6 +550,7 @@ def screener(request: Request):
             state["edits"].pop(key, None)
     else:
         rules = state["edits"].get(key) or active["rules"]
+    rules = [r for r in rules if r[0] in METRICS and not (isinstance(r[2], str) and r[2][1:] not in METRICS)]
     state["last"] = key
     save_setting(conn, "screener_state", state)
     edited = key in state["edits"]

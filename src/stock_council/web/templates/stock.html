@@ -111,7 +111,7 @@
 
   <div class="col">
     <section class="panel">
-      <div class="ph"><h2>{{ icon('council', 16) }}What each AI said</h2><span class="r">{% if show_costs() and p.opinions %}{{ cost(((p.opinions or [])|selectattr('cost')|sum(attribute='cost')) + ((p.news or {}).cost or 0), 'this check ') }}{% else %}tap to read{% endif %}</span></div>
+      <div class="ph"><h2>{{ icon('council', 16) }}What each AI said</h2><span class="r">{% if show_costs() and p.opinions %}{{ cost(((p.opinions or [])|selectattr('cost')|sum(attribute='cost')) + ((p.news or {}).get('cost') or 0), 'this check ') }}{% else %}tap to read{% endif %}</span></div>
       <div>
       {% for o in (p.opinions or []) %}
       {% if o.pending %}
@@ -180,8 +180,8 @@
     {% endif %}
 
     <details class="panel" id="news" {{ 'open' if p.status in ('news','council') }}>
-      <summary class="ph"><h2>{{ icon('news', 16) }}News the AIs read</h2><span class="r">{{ cost((p.news or {}).cost) }}{{ icon('chevdown', 14, 'tw') }}</span></summary>
-      <div class="pb md">{{ (p.news or {}).text | md | safe }}</div>
+      <summary class="ph"><h2>{{ icon('news', 16) }}News the AIs read</h2><span class="r">{{ cost((p.news or {}).get('cost')) }}{{ icon('chevdown', 14, 'tw') }}</span></summary>
+      <div class="pb md">{{ (p.news or {}).get('text') | md | safe }}</div>
     </details>
   </div>
 </div>

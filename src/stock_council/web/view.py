@@ -89,7 +89,7 @@ def key_numbers(sheet: dict) -> list[dict]:
         inst_new = (new.get("fii") or 0) + (new.get("dii") or 0)
         inst_old = (old.get("fii") or 0) + (old.get("dii") or 0)
         di = inst_new - inst_old
-        out.append({"group": "Owners", "label": "Promoter stake", "value": f"{new.get('promoter', 0):.1f}% ({dp:+.1f})",
+        out.append({"group": "Owners", "label": "Promoter stake", "value": f"{new.get('promoter') or 0:.1f}% ({dp:+.1f})",
                     "tone": "good" if dp >= 0 else ("warn" if dp > -1 else "bad"), "hint": f"Change since {old.get('quarter', '')[:6]}"})
         out.append({"group": "Owners", "label": "Funds (FII + DII)", "value": f"{inst_new:.1f}% ({di:+.1f})",
                     "tone": "good" if di > 0.5 else ("bad" if di < -1 else "warn"), "hint": f"Change since {old.get('quarter', '')[:6]}"})
@@ -185,7 +185,10 @@ def short_fail(s: str) -> str:
     if s.startswith("P/E"):
         return "P/E " + s.split()[1].split(".")[0]
     if s.startswith("ROE"):
-        return "ROE " + f"{float(s.split()[1].rstrip('%')):.1f}%"
+        try:
+            return "ROE " + f"{float(s.split()[1].rstrip('%')):.1f}%"
+        except (ValueError, IndexError):
+            return "ROE n/a"
     if s.startswith("D/E"):
         v = s.split()[1]
         return "Debt " + ("?" if v == "None" else f"{float(v):.1f}×")

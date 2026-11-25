@@ -12,6 +12,8 @@ import threading
 import time
 from datetime import date
 
+import os
+
 import numpy as np
 import pandas as pd
 
@@ -90,7 +92,7 @@ METRICS = {
 }
 
 if IS_US:   # US ownership: no promoter/pledge; insiders, institutions and short interest instead
-    for k in ("promoter", "promoter_chg", "pledge", "fii", "dii", "funds", "funds_chg"):
+    for k in ("promoter", "promoter_chg", "pledge", "fii", "dii", "funds", "funds_chg", "delivery", "delivery_30d"):  # no delivery data in the US
         METRICS.pop(k, None)
     METRICS.update({
         "insiders": ("Insider holding", "Owners", "%", "Officers, directors, 10% owners"),
@@ -282,7 +284,7 @@ def price_metrics(conn) -> tuple[str, pd.DataFrame]:
         if val is None:
             val = _price_metrics(conn)
             try:
-                tmp = f.with_suffix(".tmp")
+                tmp = f.with_suffix(f".{os.getpid()}.tmp")   # two processes never share a temp file
                 pd.to_pickle(val, tmp)
                 tmp.replace(f)                       # atomic: readers never see half a file
                 for old in DATA_DIR.glob(f"price-metrics-{MARKET['code']}-*.pkl"):
@@ -309,8 +311,10 @@ def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
     today = dates[0]
     close = df.pivot_table(index="date", columns="isin", values="close", aggfunc="last").sort_index()
     vol = df.pivot_table(index="date", columns="isin", values="vol", aggfunc="sum").sort_index()
-    dq = df.pivot_table(index="date", columns="isin", values="dq", aggfunc="sum").sort_index()
-    last = df[df["date"] == today].groupby("isin").agg({"close": "last", "prev": "last", "vol": "sum", "t": "sum", "dq": "sum"})
+    dq = df.pivot_table(index="date", columns="isin", values="dq", aggfunc=lambda x: x.sum(min_count=1)).sort_index()
+    g = df[df["date"] == today].groupby("isin")
+    last = pd.DataFrame({"close": g["close"].last(), "prev": g["prev"].last(), "vol": g["vol"].sum(),
+                         "t": g["t"].sum(), "dq": g["dq"].sum(min_count=1)})   # no delivery data -> NaN, not 0%
 
     def ret(n):
         base = close.iloc[-n - 1] if len(close) > n else close.iloc[0]

@@ -24,7 +24,8 @@ ITEMS = {"1.01": "Material agreement", "1.02": "Agreement ended", "1.03": "Bankr
 
 
 def _sec(url: str) -> httpx.Response:
-    time.sleep(0.15)   # SEC fair access: well under 10 requests a second
+    from .us_data import sec_wait
+    sec_wait()   # shared across the parallel stocks: SEC allows 10 requests a second
     return httpx.get(url, headers={"User-Agent": SEC_UA}, timeout=30, follow_redirects=True)
 
 
@@ -60,12 +61,14 @@ def insider_trades(cik: str, sub: dict, days: int = 90, max_filings: int = 25) -
     forms = [f for f in _recent(sub) if f["form"] == "4" and f["filingDate"] >= since][:max_filings]
     buys = sells = 0.0
     buyers, sellers, trades = set(), set(), []
+    failed = 0
     for f in forms:
         acc = f["accessionNumber"].replace("-", "")
         doc = re.sub(r"^xsl[^/]+/", "", f["primaryDocument"])   # raw XML, not the rendered page
         try:
             x = ET.fromstring(_sec(f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc}/{doc}").content)
         except Exception:
+            failed += 1
             continue
         who = (x.findtext(".//reportingOwner/reportingOwnerId/rptOwnerName") or "").strip()
         role = x.findtext(".//reportingOwnerRelationship/officerTitle") or (
@@ -88,7 +91,7 @@ def insider_trades(cik: str, sub: dict, days: int = 90, max_filings: int = 25) -
                            "type": "Buy" if code == "P" else "Sell", "shares": int(sh), "price": round(px, 2)})
     trades.sort(key=lambda t: t["date"] or "", reverse=True)
     return {"days": days, "buys_usd": round(buys), "sells_usd": round(sells), "net_usd": round(buys - sells),
-            "buyers": len(buyers), "sellers": len(sellers), "trades": trades[:10], "form4_filings": len(forms)}
+            "buyers": len(buyers), "sellers": len(sellers), "trades": trades[:10], "form4_filings": len(forms), "failed": failed}
 
 
 def extras(conn, ident: dict, f: dict) -> dict:
@@ -105,7 +108,8 @@ def extras(conn, ident: dict, f: dict) -> dict:
         try:
             sub = submissions(cik)
             cached = {"announcements": announcements(cik, sub), "insiders": insider_trades(cik, sub)}
-            cache_put(conn, key, cached)
+            if not (cached["insiders"] or {}).get("failed"):   # a partial read is shown but not kept
+                cache_put(conn, key, cached)
         except Exception as e:
             log.warning("SEC extras for %s failed: %s", cik, e)
             cached = {}

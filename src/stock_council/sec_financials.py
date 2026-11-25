@@ -63,14 +63,17 @@ def _series(facts: dict, tags: list[str], flow: bool) -> dict[str, float]:
 
 
 def _get(cik: str) -> dict | None:
+    """The filing data; {} when the SEC has none for this company; None when the SEC couldn't be reached."""
+    from .us_data import sec_wait
     for attempt in range(3):
         try:
+            sec_wait()
             r = httpx.get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json",
                           headers={"User-Agent": SEC_UA}, timeout=60)
             if r.status_code == 200:
                 return r.json()
             if r.status_code == 404:
-                return None
+                return {}
         except httpx.HTTPError:
             pass
         time.sleep(2 * (attempt + 1))
@@ -87,6 +90,8 @@ def annual(cik: str | None, years: int = 6) -> list[dict]:
     if hit is not None:
         return hit
     d = _get(cik)
+    if d is None:
+        return []          # SEC unreachable: try again next time, don't remember "nothing"
     facts = ((d or {}).get("facts") or {}).get("us-gaap") or {}
     s = {k: _series(facts, tags, k in FLOWS) for k, tags in TAGS.items()}
     ends = sorted(s["sales"] or s["net_profit"], reverse=True)[:years]

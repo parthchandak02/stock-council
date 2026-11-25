@@ -706,13 +706,6 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 .tn-seg{display:flex;gap:2px;height:8px;border-radius:4px;overflow:hidden}
 .tn-seg i{display:block}
 .tn-keys{display:flex;gap:14px;font-size:13.5px;color:var(--mute)} .tn-keys b{font:500 14px var(--mono);color:var(--ink)}
-.tl.compact{display:grid;grid-template-columns:auto minmax(40px,1fr) auto;align-items:center;gap:10px;padding:6px 0 0;border-top:1px solid var(--line);margin-top:2px}
-.tl.compact .tl-lab{position:static;font-size:12.5px;color:var(--mute);white-space:nowrap}
-.tl.compact .tl-lab span{font:inherit;color:inherit}
-.tl.compact a.tl-lab{min-height:32px;display:flex;align-items:center}
-.tl.compact .tl-lab.next span{color:var(--ink)}
-.tl.compact .tl-track{margin:0}
-@media (max-width:420px){.tl.compact .tl-lab{font-size:12px}}
 .qlist{padding:4px 0}
 .grp{display:flex;align-items:baseline;gap:8px;font-size:13px;font-weight:600;padding:12px 16px 4px}
 .grp em{font-style:normal;font-family:var(--mono);font-weight:500;color:var(--mute)}
@@ -729,11 +722,18 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 .quiet-link>span:first-child{color:var(--ink);font-weight:500}
 .quiet-link:hover{background:var(--raise)}
 @media (max-width:540px){
-  .tl.compact{grid-template-columns:1fr auto;grid-template-areas:"last next" "track track";row-gap:6px}
-  .tl.compact .tl-lab.last{grid-area:last} .tl.compact .tl-lab.next{grid-area:next} .tl.compact .tl-track{grid-area:track}
-  .tl.compact a.tl-lab{min-height:24px}
 }
-.tl.compact .tl-lab{align-self:center;display:flex;align-items:center}
-.tl.compact .tl-lab.last{justify-self:start;text-align:left;justify-content:flex-start}
-.tl.compact .tl-lab.next{justify-self:end;text-align:right;justify-content:flex-end}
-.tl.compact .tl-lab{min-height:24px;line-height:1.2}
+
+/* Today timeline (compact, inside the tonight card): two labels on one baseline, then the track.
+   Each label sits over its end of the track; every time carries its zone (IST / ET). */
+.tl.compact{display:grid;grid-template-columns:1fr 1fr;grid-template-areas:"last next" "track track";gap:10px 12px;padding:12px 0 2px;border-top:1px solid var(--line);margin-top:2px}
+.tl.compact .tl-lab{position:static;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;min-width:0;line-height:1.2;white-space:nowrap}
+.tl.compact .tl-lab.last{grid-area:last;align-items:flex-start;text-align:left}
+.tl.compact .tl-lab.next{grid-area:next;align-items:flex-end;text-align:right}
+.tl.compact .tl-lab b{font-size:12px;font-weight:500;color:var(--mute)}
+.tl.compact .tl-lab span{font-family:var(--sans);white-space:normal;font-size:14.5px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--ink)}
+.tl.compact .tl-lab.last span{color:var(--mute)}
+.tl.compact .tl-track{grid-area:track;margin:0 5px}
+.tl-end{position:absolute;top:3px;width:10px;height:10px;margin-left:-5px;border-radius:50%;box-sizing:border-box}
+.tl-end.a{left:0;background:var(--focus)}
+.tl-end.b{left:100%;background:var(--surf);border:2px solid var(--line2)}

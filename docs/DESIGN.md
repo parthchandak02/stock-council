@@ -25,4 +25,4 @@ Read with `~/.claude/skills/design-principles/references/principles.md`. This fi
 - `scripts/deploy.sh` runs `scripts/page_sweep.py` (both markets) and the UX check (`ux-check.json`) on a copy of the live data, then deploys and checks live. Never deploy around it.
 
 ## Lessons
-See the design-principles skill's lessons.md (24 Nov 2026 entries are all from this project): market switch keeps the page, no clipped chips, edits stick, related actions together and alike, no white control flash, no bare error pages, short screen list, no emoji flags, no generic card piles.
+See the design-principles skill's lessons.md (24 Nov 2026 entries are all from this project): market switch keeps the page, no clipped chips, edits stick, related actions together and alike, no white control flash, no bare error pages, short screen list, no emoji flags, no generic card piles; 25 Nov: every time says IST or ET, paired labels line up.

@@ -24,10 +24,10 @@
   <div class="tn-keys">{% for n, w in [(cnt.b, 'buy'), (cnt.h, 'hold'), (cnt.x, 'split'), (cnt.s, 'sell')] if n %}<span><b>{{ n }}</b> {{ w }}</span>{% endfor %}</div>
   {% endif %}
   {% if tl %}
-  <div class="tl compact" id="tl" data-iana="{{ M.tz }}" data-last="{{ tl.last or '' }}" data-next="{{ tl.next or '' }}" data-close="{{ tl.close or '' }}" aria-label="Screen timeline">
-    {% if tl.last %}<a class="tl-lab last" href="{{ B }}/run/{{ tl.last_run }}" title="Last run"><span></span></a>{% else %}<span class="tl-lab last"><span>no run yet</span></span>{% endif %}
-    <div class="tl-track"><i class="tl-fill"></i><i class="tl-close" hidden></i><i class="tl-now" title="Now"></i></div>
-    <span class="tl-lab next"><span>{{ tl.why or '' }}</span></span>
+  <div class="tl compact" id="tl" data-iana="{{ M.tz }}" data-zone="{{ 'ET' if IS_US else 'IST' }}" data-last="{{ tl.last or '' }}" data-next="{{ tl.next or '' }}" aria-label="Screen timeline">
+    {% if tl.last %}<a class="tl-lab last" href="{{ B }}/run/{{ tl.last_run }}"><b>Last run</b><span></span></a>{% else %}<span class="tl-lab last"><b>Last run</b><span>none yet</span></span>{% endif %}
+    <span class="tl-lab next"><b>Next run</b><span>{{ tl.why or '' }}</span></span>
+    <div class="tl-track"><i class="tl-fill"></i><i class="tl-end a"></i><i class="tl-end b"></i><i class="tl-now" title="Now"></i></div>
   </div>
   {% endif %}
 </section>

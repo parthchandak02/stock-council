@@ -55,6 +55,23 @@ tpl.env.filters["nice"] = nice_name
 tpl.env.filters["fail"] = short_fail
 tpl.env.filters["num"] = lambda x: "-" if x is None else f"{x:,}"
 tpl.env.filters["day"] = lambda s: date.fromisoformat(s[:10]).strftime("%a %-d %b") if s else ""
+ZONE = "ET" if IS_US else "IST"     # every clock time on the site is in the market's zone and says so
+
+
+def _clock(v) -> str:
+    """'20:15' or an ISO timestamp -> '8:15 PM IST' in the market's own zone."""
+    if not v:
+        return ""
+    from datetime import datetime, time as _t
+    from zoneinfo import ZoneInfo
+    if len(v) <= 5:
+        t = _t.fromisoformat(v)
+    else:
+        t = datetime.fromisoformat(v).astimezone(ZoneInfo(MARKET["tz"])).time()
+    return f"{t.hour % 12 or 12}:{t.minute:02d} {'AM' if t.hour < 12 else 'PM'} {ZONE}"
+
+
+tpl.env.filters["clock"] = _clock
 B = MARKET["base"]
 
 

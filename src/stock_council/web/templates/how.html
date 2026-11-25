@@ -31,7 +31,7 @@
   <section class="panel">
     <div class="ph"><h2>{{ icon('clock', 16) }}When</h2></div>
     <div class="rows">
-      <div class="whenrow"><b style="font-weight:600;font-size:14px">{{ 'Weekdays' if st.schedule.days == [0,1,2,3,4] else 'Chosen days' }} {{ st.schedule.time }}</b><span class="muted" style="font-size:14px">{{ 'New York' if IS_US else 'India' }} time, after the market closes{% if not st.schedule.enabled %} (paused){% endif %}</span></div>
+      <div class="whenrow"><b style="font-weight:600;font-size:14px">{{ 'Weekdays' if st.schedule.days == [0,1,2,3,4] else 'Chosen days' }} {{ st.schedule.time|clock }}</b><span class="muted" style="font-size:14px">after the market closes{% if not st.schedule.enabled %} (paused){% endif %}</span></div>
       {% if st.whatsapp.enabled %}<div class="whenrow"><b style="font-weight:600;font-size:14px">WhatsApp</b><span class="muted" style="font-size:14px">a short list to the WhatsApp group</span></div>{% endif %}
       <div class="whenrow"><b style="font-weight:600;font-size:14px">Any time</b><span class="muted" style="font-size:14px">check one stock from Today</span></div>
     </div>

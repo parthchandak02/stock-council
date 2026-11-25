@@ -16,7 +16,7 @@
         <input type="checkbox" name="sched_on" value="1" {{ 'checked' if sc.enabled }} class="switch"></label>
       <label><span class="t"><b>Screen to run</b><span>Any screen from the Screener, as it reads there · <a href="{{ B }}/screener?{{ 'preset=' ~ evening.key[7:] if evening.key.startswith('preset:') else 's=' ~ evening.key[2:] }}" style="text-decoration:underline">edit its rules</a></span></span>
         <select name="sched_screen" aria-label="Screen to run each evening">{% for k, n in screen_choices %}<option value="{{ k }}" {{ 'selected' if k == evening.key }}>{{ n }}</option>{% endfor %}</select></label>
-      <label><span class="t"><b>Time</b><span>{{ 'New York' if IS_US else 'India' }} time</span></span>
+      <label><span class="t"><b>Time</b><span>{{ 'New York time (ET)' if IS_US else 'India time (IST)' }}</span></span>
         <select name="sched_time" aria-label="Run time">{% for t in times %}<option {{ 'selected' if t == sc.time }}>{{ t }}</option>{% endfor %}</select></label>
       <div class="days-row"><span class="t"><b>Days</b><span>Holidays are skipped</span></span>
         <span class="days">{% for d in daynames %}<label class="day"><input type="checkbox" name="sched_days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in sc.days }}><span>{{ d[:2] }}</span></label>{% endfor %}</span></div>

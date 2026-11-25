@@ -1,7 +1,7 @@
 {# The fact sheet as tables: the same numbers every AI received, laid out to read. #}
 {% set f = s.fundamentals or {} %}{% set t = s.technicals or {} %}
 {% set yrs = (f.annual or [])[:4] %}
-{% macro n(x, suf='') -%}{{ '–' if x is none else ('{:,.1f}'.format(x) if x is number and x is not integer else '{:,}'.format(x)) ~ (suf if x is not none else '') }}{%- endmacro %}
+{% macro n(x, suf='') -%}{{ '–' if x is not defined or x is none or x != x else ('{:,.1f}'.format(x) if x is number and x is not integer else '{:,}'.format(x)) ~ suf }}{%- endmacro %}
 {% macro fy(d) %}FY{{ (d or '')[2:4] }}{% endmacro %}
 
 <section class="fs">

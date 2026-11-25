@@ -551,3 +551,7 @@ select{font:inherit;font-weight:500;font-size:14px;color:var(--ink);background:v
   .anns a{display:inline-block;padding:10px 0}
   .ph .r .btn,.acts .btn{min-height:40px}
 }
+/* Settings: the restore button sits at the end of the page, never floating over settings */
+.savebar{position:static!important;background:transparent!important;border-top:0!important;margin:0!important;padding:4px 0 0!important}
+/* phone: panel headers with buttons wrap to two lines instead of squeezing */
+@media (max-width:540px){.ph{flex-wrap:wrap;row-gap:8px} .ph .acts{width:100%;justify-content:flex-end}}

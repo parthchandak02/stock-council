@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS insider_tx (
     acc TEXT NOT NULL, sk TEXT NOT NULL, cik TEXT NOT NULL, day TEXT, code TEXT, shares REAL, price REAL,
     PRIMARY KEY (acc, sk));
 CREATE INDEX IF NOT EXISTS insider_tx_cik ON insider_tx(cik, day);
+CREATE TABLE IF NOT EXISTS insider_filers (cik TEXT PRIMARY KEY, last TEXT);
 CREATE TABLE IF NOT EXISTS owners_loaded (what TEXT PRIMARY KEY, at TEXT, note TEXT);
 CREATE TABLE IF NOT EXISTS cusip_map (cusip TEXT PRIMARY KEY, ticker TEXT, at TEXT);
 CREATE TABLE IF NOT EXISTS inst_change (
@@ -117,6 +118,8 @@ def load_insider_quarter(conn, url: str) -> int:
         sub = {r["ACCESSION_NUMBER"]: str(int(r["ISSUERCIK"])) for r in _tsv(z, "SUBMISSION.tsv")
                if r.get("DOCUMENT_TYPE") in ("4", "4/A") and (r.get("ISSUERCIK") or "").isdigit()
                and str(int(r["ISSUERCIK"])) in ciks}
+        # every company whose insiders file Form 4 at all (foreign issuers don't): only these can read "0"
+        conn.executemany("INSERT OR REPLACE INTO insider_filers VALUES (?,?)", [(c, url) for c in set(sub.values())])
         rows = []
         for r in _tsv(z, "NONDERIV_TRANS.tsv"):
             cik = sub.get(r["ACCESSION_NUMBER"])
@@ -182,6 +185,7 @@ def load_insider_day(conn, day: date, ciks: dict[str, str]) -> int | None:
             continue
         if cik not in ciks:
             continue
+        conn.execute("INSERT OR REPLACE INTO insider_filers VALUES (?,?)", (cik, day.isoformat()))
         if tx:      # one short write per filing: the website shares this database and must never wait on us
             conn.executemany("INSERT OR REPLACE INTO insider_tx VALUES (?,?,?,?,?,?,?)",
                              [(acc, sk, cik, d, c, sh, px) for sk, d, c, sh, px in tx])
@@ -354,15 +358,18 @@ def changes(conn):
         "SUM(CASE WHEN code='P' THEN shares*price ELSE -shares*price END) net_usd FROM insider_tx "
         "WHERE day >= ? GROUP BY cik", conn, params=(since,))
     inst = pd.read_sql_query("SELECT ticker isin, shares, prev_shares, period FROM inst_change", conn)
+    filers = {r[0] for r in conn.execute("SELECT cik FROM insider_filers")}
     df = u.merge(ins, on="cik", how="left").merge(inst, on="isin", how="left").set_index("isin")
+    files4 = df["cik"].isin(filers) | df["net_sh"].notna()
     for k in ("shares_cr", "net_sh", "net_usd", "shares", "prev_shares"):   # empty tables come back untyped
         df[k] = pd.to_numeric(df[k], errors="coerce").astype(float)
     sh = (df["shares_cr"] * 1e6).where(df["shares_cr"] > 0)
     covered = _loaded_any(conn, "form4:")
     out = pd.DataFrame(index=df.index)
     # a company with no insider trades in the window had a change of 0, once the window is covered
-    out["insiders_chg"] = (df["net_sh"].fillna(0) if covered else df["net_sh"]) / sh * 100
-    out["insiders_net"] = (df["net_usd"].fillna(0) if covered else df["net_usd"]) / 1e6
+    fill = covered & files4          # files Form 4 but traded nothing in the window -> 0; never files -> blank
+    out["insiders_chg"] = df["net_sh"].where(~fill, df["net_sh"].fillna(0)) / sh * 100
+    out["insiders_net"] = df["net_usd"].where(~fill, df["net_usd"].fillna(0)) / 1e6
     out["institutions_chg"] = (df["shares"] - df["prev_shares"]) / sh * 100
     out["inst_period"] = df["period"]
     out = out.replace([float("inf"), float("-inf")], float("nan"))

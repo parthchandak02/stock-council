@@ -125,14 +125,23 @@ def news_digest(name: str, symbol: str, ctx: dict | None = None) -> dict:
               "quarterly results, order wins, capacity expansion, management commentary, fund raising, promoter actions, "
               "regulatory issues, and any reason for unusual trading volume in the last week. "
               "Reply with up to 10 dated bullet points, newest first, each with its source site. Facts only, no opinion.")
-    data = _chat(NEWS_MODEL, [{"role": "user", "content": prompt}],
-                 plugins=[{"id": "web", "engine": NEWS_ENGINE, "max_results": 8}], max_tokens=4000,
-                 purpose="news", ctx=ctx)
-    msg = data["choices"][0]["message"]
+    cost, tokens = 0.0, [0, 0]
+    # A thinking model can spend its whole budget thinking and return no text (ZTO, 26 Nov 2026):
+    # light thinking first, then once more with thinking off, and say so if there is still nothing.
+    for effort in ("low", "off"):
+        data = _chat(NEWS_MODEL, [{"role": "user", "content": prompt}],
+                     plugins=[{"id": "web", "engine": NEWS_ENGINE, "max_results": 8}], max_tokens=8000,
+                     purpose="news", ctx=ctx, effort=effort)
+        msg = data["choices"][0]["message"]
+        u = data.get("usage") or {}
+        cost += u.get("cost") or 0
+        tokens = [tokens[0] + (u.get("prompt_tokens") or 0), tokens[1] + (u.get("completion_tokens") or 0)]
+        text = (msg.get("content") or "").strip()
+        if text:
+            break
     sources = [a["url_citation"]["url"] for a in msg.get("annotations") or [] if a.get("type") == "url_citation"]
-    u = data.get("usage") or {}
-    return {"text": (msg.get("content") or "").strip(), "sources": sources, "cost": u.get("cost"),
-            "tokens": [u.get("prompt_tokens"), u.get("completion_tokens")]}
+    return {"text": text or "The news search returned nothing for this company today; judge on the fact sheet alone.",
+            "sources": sources, "cost": cost, "tokens": tokens, "empty": not text}
 
 
 def _parse(text: str) -> dict:

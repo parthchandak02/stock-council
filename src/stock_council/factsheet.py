@@ -20,7 +20,7 @@ def _isin_for(conn, symbol: str) -> str:
         f"SELECT isin FROM daily WHERE (symbol=? AND exch='{PRIMARY_EXCH}') OR code=? OR (symbol=? AND exch='BSE') "
         "ORDER BY date DESC LIMIT 1", (symbol, symbol, symbol)).fetchone()
     if not row:
-        raise LookupError(f"{symbol} not found in NSE/BSE data")
+        raise LookupError(f"{symbol} not found in {MARKET['exchanges']} data")
     return row["isin"]
 
 

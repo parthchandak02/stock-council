@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% from "_ui.html" import icon, flag %}
+{% block title %}Which company? · Stock Council{% endblock %}
+{% block main %}
+{% macro row(h, base, mk) -%}
+<form method="post" action="{{ base }}/check" class="pickrow"><input type="hidden" name="symbol" value="{{ h.symbol }}">
+  <button type="submit"><span class="nm"><b>{{ h.name|nice }}</b><span>{% if mk %}{{ flag(mk) }}{% endif %}{{ h.symbol }}</span></span>{{ icon('chev', 16, 'chev') }}</button></form>
+{%- endmacro %}
+<section class="panel">
+  <div class="ph"><h1 class="pick-h">{{ 'Which one?' if hits or elsewhere else 'No company found' }}</h1><span class="r">“{{ q }}”</span></div>
+  {% if hits %}<div class="rows">{% for h in hits %}{{ row(h, B, None) }}{% endfor %}</div>
+  {% elif not elsewhere %}<div class="pb muted">No {{ M.name }} company matches that. Try its ticker{{ '' if IS_US else ' or BSE code' }}, or a shorter part of the name.</div>{% endif %}
+</section>
+{% if elsewhere %}
+<section class="panel">
+  <div class="ph"><h2>{{ flag(other.code) }}In {{ other.name }}</h2></div>
+  <div class="rows">{% for h in elsewhere %}{{ row(h, other.base, other.code) }}{% endfor %}</div>
+</section>
+{% endif %}
+{% endblock %}

@@ -129,3 +129,50 @@
   btn.addEventListener('click', () => set(box.hidden));
   box.addEventListener('keydown', e => { if (e.key === 'Escape') { set(false); btn.focus(); } });
 })();
+
+// Search as you type: matching companies (ticker and name) in this market, then any in the other market.
+// Picking one checks it straight away; Enter with nothing picked lets the server work out what was meant.
+(function () {
+  const input = document.getElementById('srch-q'), list = document.getElementById('sug');
+  if (!input || !list) return;
+  const form = input.form;
+  let items = [], sel = -1, timer = 0, seq = 0;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); sel = -1; };
+  const mark = () => list.querySelectorAll('li[data-i]').forEach(li => li.setAttribute('aria-selected', +li.dataset.i === sel));
+  function go(it) {
+    if (it.base === undefined) { input.value = it.symbol; form.submit(); return; }
+    const f = document.createElement('form');           // a company in the other market: check it there
+    f.method = 'post'; f.action = it.base + '/check';
+    f.innerHTML = `<input type="hidden" name="symbol" value="${esc(it.symbol)}">`;
+    document.body.appendChild(f); f.submit();
+  }
+  function render(d) {
+    items = [...d.hits, ...d.other];
+    if (!items.length) { close(); return; }
+    let h = d.hits.map((x, i) => `<li role="option" data-i="${i}"><span class="nm"><b>${esc(x.name)}</b><span>${esc(x.symbol)}</span></span></li>`).join('');
+    if (d.other.length) h += `<li class="sep" aria-hidden="true">In ${esc(d.other[0].market)}</li>` + d.other.map((x, j) =>
+      `<li role="option" data-i="${d.hits.length + j}"><span class="nm"><b>${esc(x.name)}</b><span>${esc(x.symbol)}</span></span><img class="flag" src="/static/flag-${esc(x.code)}.svg" alt="${esc(x.market)}" width="18" height="12"></li>`).join('');
+    list.innerHTML = h; list.hidden = false; input.setAttribute('aria-expanded', 'true'); sel = -1;
+  }
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2) { close(); return; }
+    timer = setTimeout(async () => {
+      const my = ++seq;
+      try { const r = await fetch((window.B || '') + '/suggest?q=' + encodeURIComponent(q)); const d = await r.json(); if (my === seq) render(d); }
+      catch (e) { close(); }
+    }, 120);
+  });
+  input.addEventListener('keydown', e => {
+    if (list.hidden) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = sel + 1 >= items.length ? -1 : sel + 1; mark(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = sel - 1 < -1 ? items.length - 1 : sel - 1; mark(); }
+    else if (e.key === 'Enter' && sel >= 0) { e.preventDefault(); go(items[sel]); }
+    else if (e.key === 'Escape') { close(); e.stopPropagation(); }
+  });
+  list.addEventListener('mousedown', e => e.preventDefault());   // keep focus in the box
+  list.addEventListener('click', e => { const li = e.target.closest('li[data-i]'); if (li) go(items[+li.dataset.i]); });
+  input.addEventListener('blur', () => setTimeout(close, 150));
+})();

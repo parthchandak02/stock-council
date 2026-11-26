@@ -226,6 +226,43 @@
           }
         }
       ]
+    },
+    {
+      "name": "Search finds companies by name, and points to the other market",
+      "steps": [
+        {
+          "goto": "/"
+        },
+        {
+          "click": "#srch-btn"
+        },
+        {
+          "fill": "#srch-q",
+          "value": "mizuho"
+        },
+        {
+          "wait": 900
+        },
+        {
+          "click": "#sug li.sep:has-text('US')"
+        },
+        {
+          "goto": "/us/"
+        },
+        {
+          "click": "#srch-btn"
+        },
+        {
+          "fill": "#srch-q",
+          "value": "skm egg"
+        },
+        {
+          "wait": 900
+        },
+        {
+          "click": "#sug li.sep:has-text('India')"
+        }
+      ]
     }
   ]
 }

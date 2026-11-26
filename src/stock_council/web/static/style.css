@@ -737,3 +737,19 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 .tl-end{position:absolute;top:3px;width:10px;height:10px;margin-left:-5px;border-radius:50%;box-sizing:border-box}
 .tl-end.a{left:0;background:var(--focus)}
 .tl-end.b{left:100%;background:var(--surf);border:2px solid var(--line2)}
+
+/* "Which company?" page and the search suggestions */
+.pick-h{font-size:18px;margin:0}
+.pickrow button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) 16px;align-items:center;gap:14px;width:100%;min-height:52px;padding:10px 16px;cursor:pointer}
+.pickrow button:hover,.pickrow button:focus-visible{background:var(--raise)}
+.pickrow .nm,.sug .nm{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pickrow .nm b,.sug .nm b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pickrow .nm span,.sug .nm span{display:inline-flex;align-items:center;gap:6px;font:13px var(--mono);color:var(--mute)}
+.sug{position:absolute;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));top:100%;margin:4px auto 0;max-width:640px;
+  list-style:none;padding:4px 0;background:var(--surf);border:1px solid var(--line2);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.35);z-index:30;max-height:60vh;overflow:auto}
+.sug[hidden]{display:none}
+.sug li{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:48px;padding:6px 14px;cursor:pointer}
+.sug li[aria-selected="true"],.sug li:hover{background:var(--raise)}
+.sug .sep{min-height:0;padding:8px 14px 4px;font-size:12px;color:var(--mute);cursor:default;border-top:1px solid var(--line)}
+.sug .sep:hover{background:none}
+.sug .go{font-size:12px;color:var(--mute)}

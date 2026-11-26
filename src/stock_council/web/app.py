@@ -456,11 +456,34 @@ async def save_order(request: Request):
 
 
 @app.post("/check")
-def check(symbol: str = Form(...)):
-    sym = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
-    run_id = start_run("on_demand")
-    threading.Thread(target=_quiet, args=(run_one, sym, run_id), daemon=True).start()
-    return RedirectResponse(B + f"/run/{run_id}", status_code=303)
+def check(request: Request, symbol: str = Form(...)):
+    """Check one company from whatever was typed: ticker, BSE code or name. Unclear text, or a name that
+    also matches a company in the other market, gets a short "which one?" page instead of a failed run."""
+    from ..lookup import find, find_other, resolve
+    conn = db()
+    q = symbol.strip()
+    hit = resolve(conn, q)
+    other, elsewhere = find_other(q)
+    if hit and (hit["score"] == 100 or not elsewhere):
+        run_id = start_run("on_demand")
+        threading.Thread(target=_quiet, args=(run_one, hit["symbol"], run_id), daemon=True).start()
+        return RedirectResponse(B + f"/run/{run_id}", status_code=303)
+    return tpl.TemplateResponse(request, "pick.html", {"q": q, "hits": find(conn, q, 8), "other": other,
+                                                       "elsewhere": elsewhere, "nav": ""})
+
+
+@app.get("/suggest")
+def suggest(q: str = ""):
+    """Search-as-you-type for the top bar: this market's matches, then a hint for the other market."""
+    from ..lookup import find, find_other
+    q = q.strip()[:80]
+    if len(q) < 2:
+        return {"hits": [], "other": []}
+    hits = find(db(), q, 7)
+    other, far = find_other(q, 2) if len(hits) < 3 or hits[0]["score"] < 95 else (None, [])
+    return {"hits": [{"symbol": h["symbol"], "name": nice_name(h["name"])} for h in hits],
+            "other": [{"symbol": h["symbol"], "name": nice_name(h["name"]), "base": other["base"],
+                       "market": other["name"], "code": other["code"]} for h in far]}
 
 
 @app.post("/screen")

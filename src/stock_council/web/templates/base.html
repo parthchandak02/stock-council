@@ -36,8 +36,9 @@
   </nav>
 </header>
 <form class="srch" id="srch" method="post" action="{{ B }}/check" autocomplete="off" hidden>
-  {{ icon('search', 16) }}<input name="symbol" id="srch-q" placeholder="{{ 'Any ticker, e.g. NVDA' if IS_US else 'Any NSE symbol, e.g. TCS' }}" required aria-label="Stock to check">
+  {{ icon('search', 16) }}<input name="symbol" id="srch-q" placeholder="{{ 'Ticker or name, e.g. NVDA or Apple' if IS_US else 'Symbol or name, e.g. TCS or Infosys' }}" required aria-label="Stock to check" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sug">
   <button>Check</button>
+  <ul class="sug" id="sug" role="listbox" hidden></ul>
 </form>
 <main>{% block main %}{% endblock %}</main>
 <footer class="foot">{{ flag('us' if IS_US else 'in') }} {{ M.name }} · facts from {{ "SEC filings and market data" if IS_US else "NSE and BSE filings" }} · opinions from AI models · not investment advice</footer>

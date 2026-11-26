@@ -182,8 +182,10 @@ def load_insider_day(conn, day: date, ciks: dict[str, str]) -> int | None:
             continue
         if cik not in ciks:
             continue
-        conn.executemany("INSERT OR REPLACE INTO insider_tx VALUES (?,?,?,?,?,?,?)",
-                         [(acc, sk, cik, d, c, sh, px) for sk, d, c, sh, px in tx])
+        if tx:      # one short write per filing: the website shares this database and must never wait on us
+            conn.executemany("INSERT OR REPLACE INTO insider_tx VALUES (?,?,?,?,?,?,?)",
+                             [(acc, sk, cik, d, c, sh, px) for sk, d, c, sh, px in tx])
+            conn.commit()
         n += len(tx)
     conn.commit()
     return n

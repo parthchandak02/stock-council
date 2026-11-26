@@ -677,6 +677,7 @@ def screener(request: Request):
     q = request.query_params
     saved = st.get("screens") or []
     state = _screen_state(conn)
+    before = json.dumps(state, sort_keys=True)
     key = ("preset:" + q["preset"]) if q.get("preset") else ("s:" + q["s"]) if q.get("s") else (q.get("from") or state["last"])
     active = _screen_base(key, saved) or _screen_base("preset:" + PRESETS[0]["id"], saved)
     key = active["key"]
@@ -690,7 +691,8 @@ def screener(request: Request):
         rules = state["edits"][key] if key in state["edits"] else active["rules"]
     rules = [r for r in rules if r[0] in METRICS and not (isinstance(r[2], str) and r[2][1:] not in METRICS)]
     state["last"] = key
-    save_setting(conn, "screener_state", state)
+    if json.dumps(state, sort_keys=True) != before:   # just looking writes nothing
+        save_setting(conn, "screener_state", state)
     edited = key in state["edits"]
     res = run_rules(rules, conn) if rules else None
     extra = [k for k, _, _ in rules] + [v[1:] for _, _, v in rules if isinstance(v, str)]

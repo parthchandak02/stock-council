@@ -107,6 +107,18 @@ def build(symbol: str, nse: NSE | None = None) -> dict:
         sheet["fundamentals"] = upgrade(sheet["fundamentals"], ident.get("cik"))   # official 10-K years
         sheet.update(extras(conn, ident, sheet["fundamentals"]))
         tech.update(_offex_facts(conn, isin))
+        try:                                  # SEC ownership changes, same numbers as the Screener's
+            from .us_owners import changes
+            ch = changes(conn)
+            if isin in ch.index:
+                r = ch.loc[isin]
+                sheet["ownership_changes_us"] = {
+                    "insider_open_market_net_buying_3m_pct_of_shares": None if r["insiders_chg"] != r["insiders_chg"] else round(float(r["insiders_chg"]), 3),
+                    "insider_open_market_net_buying_3m_usd_m": None if r["insiders_net"] != r["insiders_net"] else round(float(r["insiders_net"]), 2),
+                    "funds_13f_change_last_quarter_pts": None if r["institutions_chg"] != r["institutions_chg"] else round(float(r["institutions_chg"]), 2),
+                    "funds_quarter_end": r["inst_period"] if isinstance(r["inst_period"], str) else None}
+        except Exception:
+            pass
     elif ident["nse_symbol"]:
         key = f"nse:{ident['nse_symbol']}"
         disc = cache_get(conn, key, max_age_days=2)

@@ -103,8 +103,9 @@ if IS_US:   # US ownership: no promoter/pledge; insiders, institutions and short
         "offex_chg": ("Off-exchange vs usual", "Price & volume", "pts", "20-day off-exchange share minus its 1-year median; below 0 = more trading on the exchanges"),
         "short_days": ("Days to cover", "Owners", "days", "Short position ÷ average daily volume"),
         "short_chg": ("Short interest change, 1 mo", "Owners", "%", "This month's short position vs last month's"),
-        "insiders_chg": ("Insider holding change, 3 mo", "Owners", "pts", "From weekly snapshots since 25 Nov 2026; blank until 3 months of history"),
-        "institutions_chg": ("Institutional change, 3 mo", "Owners", "pts", "From weekly snapshots since 25 Nov 2026; blank until 3 months of history"),
+        "insiders_chg": ("Insider buying, 3 mo", "Owners", "pts", "Open-market buys minus sales by officers, directors and 10% owners (Form 4), last 3 months, % of shares"),
+        "insiders_net": ("Insider net buying, 3 mo", "Owners", f"{CUR} M", "Value bought minus value sold on the open market (Form 4), last 3 months"),
+        "institutions_chg": ("Funds change, last quarter", "Owners", "pts", "Change in funds' holdings over the latest reported quarter (13F; funds that filed both quarters), % of shares"),
     })
 
 PRESETS = [
@@ -419,18 +420,15 @@ def snapshot_owners(conn, isin: str | None = None) -> int:
 
 
 def _owner_changes(conn, df: pd.DataFrame) -> pd.DataFrame:
-    """Insider and institutional holding change over ~3 months, in percentage points (US)."""
+    """US ownership changes from SEC filings: insider net buying over 3 months (Form 4) and the change in
+    funds' holdings over the latest reported quarter (13F). See us_owners.py."""
     try:
-        ensure_schema(conn, "owner_hist", OWNER_HIST)
-        h = pd.read_sql_query(
-            "SELECT n.isin, n.insiders - o.insiders insiders_chg, n.institutions - o.institutions institutions_chg "
-            "FROM owner_hist n JOIN owner_hist o ON o.isin = n.isin "
-            "WHERE n.day = (SELECT max(day) FROM owner_hist x WHERE x.isin = n.isin) "
-            "AND o.day = (SELECT max(day) FROM owner_hist y WHERE y.isin = n.isin AND y.day <= date(n.day, '-84 days'))",
-            conn).set_index("isin")
-        return df.join(h, how="left")
-    except Exception:
-        df["insiders_chg"] = df["institutions_chg"] = float("nan")
+        from .us_owners import changes
+        return df.join(changes(conn)[["insiders_chg", "insiders_net", "institutions_chg"]], how="left")
+    except Exception as e:
+        log.warning("ownership changes not joined: %s", e)
+        for k in ("insiders_chg", "insiders_net", "institutions_chg"):
+            df[k] = float("nan")
         return df
 
 

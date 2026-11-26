@@ -26,6 +26,8 @@ def before_screen() -> dict:
         from . import offex
         from .daily import db
         out["off_exchange"] = _step("off-exchange volume", offex.sync, db())
+        from . import us_owners          # insiders' new Form 4s since yesterday
+        out["insiders"] = _step("insider trades", us_owners.sync_insiders, db())
     return out | {
         "splits_bonuses": _step("corporate actions", actions.update, days_back=40),
         "announcements": _step("announcements", filings.update_announcements, days=2),
@@ -41,7 +43,9 @@ def after_screen() -> dict:
     # the Screener's price data for the new day, built now so no visitor waits for it
     ready = _step("screener prices", lambda: bool(universe.price_metrics(db())))
     if IS_US:
-        return {"screener_prices": ready, "fundamentals": _step("fundamentals", universe.refresh, limit=600)}
+        from . import us_owners          # funds' 13F holdings: only does work when the SEC posts a new quarter
+        return {"screener_prices": ready, "fundamentals": _step("fundamentals", universe.refresh, limit=600),
+                "institutions": _step("13F holdings", us_owners.sync_institutions, db())}
     return {
         "screener_prices": ready,
         "fundamentals": _step("fundamentals", universe.refresh, limit=600),

@@ -55,6 +55,8 @@
     <div><dt>Institutions own</dt><dd>{{ n(o.institutions_pct, '%') }}</dd></div>
     <div><dt>Short interest</dt><dd>{{ n(o.short_pct_float, '%') }} <span class="muted">of float</span></dd></div>
     <div><dt>Insider buys / sells, 90 days</dt><dd>${{ '{:,.0f}'.format(ins.buys_usd or 0) }} / ${{ '{:,.0f}'.format(ins.sells_usd or 0) }}</dd></div>
+    {% set oc = s.ownership_changes_us or {} %}{% if oc.funds_13f_change_last_quarter_pts is not none and oc.funds_13f_change_last_quarter_pts is defined %}
+    <div><dt>Funds change, quarter to {{ oc.funds_quarter_end|day }}</dt><dd>{{ '%+.2f'|format(oc.funds_13f_change_last_quarter_pts) }} <span class="muted">pts of shares</span></dd></div>{% endif %}
   </dl>
   {% if ins.trades %}<div class="tblwrap"><table class="tbl">
     <tr><th>Date</th><th>Insider</th><th>Role</th><th>Type</th><th>Shares</th><th>Price</th></tr>

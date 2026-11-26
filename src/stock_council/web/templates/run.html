@@ -1,11 +1,11 @@
 {% extends "base.html" %}{% from "_ui.html" import icon, cost %}
-{% block title %}{{ 'How the list was found' if run.kind in ('daily', 'manual') else 'Asking the council' }} · Stock Council{% endblock %}
+{% block title %}{{ 'How the list was found' if run.kind in ('daily', 'manual') else ('Asking the council' if run.status == 'running' else 'The council' ~ "'s calls") }} · Stock Council{% endblock %}
 {% block main %}
 <div id="live" {% if run.status == 'running' %}data-poll="1"{% endif %} style="display:flex;flex-direction:column;gap:inherit">
 <a class="back" href="{{ B }}/">{{ icon('back', 16) }}Today</a>
 <div class="pagehead">
   <div>
-    <h1>{{ 'How the list was found' if run.kind in ('daily', 'manual') else 'Asking the council' }}</h1>
+    <h1>{{ 'How the list was found' if run.kind in ('daily', 'manual') else ('Asking the council' if run.status == 'running' else 'The council' ~ "'s calls") }}</h1>
     <p>{{ run.day|day }}{% if run.status == 'running' %} · <span class="livetag"><span class="livedot"></span>live</span>{% elif run.finished %} · finished {{ run.finished|clock }}{% endif %} {{ cost(run.cost_usd, '· AI cost ') }}</p>
   </div>
   <a class="btn ghost sm" href="{{ B }}/how">{{ icon('how', 15) }}What each step means</a>

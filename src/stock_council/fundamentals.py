@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import math
 
+import time
+
 import pandas as pd
 import yfinance as yf
 
@@ -45,12 +47,55 @@ def _cagr(new, old, years):
     return round(((new / old) ** (1 / years) - 1) * 100, 1)
 
 
+_fx_cache: dict[str, tuple[float, float]] = {}
+
+
+def fx_rate(ccy: str | None) -> float | None:
+    """How many units of the market's currency one unit of `ccy` buys (1 when it is the same or unknown).
+    From Yahoo's FX quotes, cached for 12 hours."""
+    from .config import IS_US
+    home = "USD" if IS_US else "INR"
+    if not ccy or ccy == home:
+        return 1.0
+    scale = 1.0
+    if ccy in ("GBX", "GBP0.01"):      # pence
+        ccy, scale = "GBP", 0.01
+    hit = _fx_cache.get(ccy)
+    if hit and hit[0] > time.time() - 43200:
+        return hit[1] * scale
+    try:
+        rate = float(yf.Ticker(f"{ccy}{home}=X").fast_info.get("lastPrice"))
+    except Exception:
+        rate = None
+    if not rate or rate != rate:
+        return None
+    _fx_cache[ccy] = (time.time(), rate)
+    return rate * scale
+
+
 def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = False) -> dict:
     t = yf.Ticker(yahoo_symbol)
     inc, bs, cf = t.income_stmt, t.balance_sheet, t.cashflow
     qi, qb = t.quarterly_income_stmt, t.quarterly_balance_sheet
     if inc is None or inc.empty or bs is None or bs.empty:
         raise LookupError(f"no financials on Yahoo for {yahoo_symbol}")
+
+    # Foreign companies report in their own currency (ZTO in yuan, Sun Life in Canadian dollars, Mizuho in
+    # yen) while the price is in ours: convert every statement once, here, so P/E, P/B and the rest are right.
+    info = {}
+    try:
+        info = t.get_info() or {}
+    except Exception:
+        pass
+    fin_ccy = (info.get("financialCurrency") or "").upper() or None
+    fx = fx_rate(fin_ccy)
+    if fx is None:
+        raise LookupError(f"no exchange rate for {fin_ccy} ({yahoo_symbol})")
+    if fx != 1:
+        inc, bs = inc * fx, bs * fx
+        cf = cf * fx if cf is not None else cf
+        qi = qi * fx if qi is not None else qi
+        qb = qb * fx if qb is not None else qb
 
     # drop fully empty year columns (Yahoo often returns a blank oldest year)
     inc = inc.loc[:, inc.notna().any()]
@@ -144,7 +189,7 @@ def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = Fal
     owners: dict = {}
     if with_sector:
         try:
-            info = t.get_info()
+            info = info or t.get_info()
             sector, industry = info.get("sector"), info.get("industry")
             dy = info.get("trailingAnnualDividendYield")
             div_yield = round(dy * 100, 2) if isinstance(dy, (int, float)) else None
@@ -167,6 +212,7 @@ def fetch(yahoo_symbol: str, price: float | None = None, with_sector: bool = Fal
         return None
     return {
         "yahoo_symbol": yahoo_symbol, "sector": sector, "industry": industry, **owners,
+        "reported_currency": fin_ccy, "fx_to_market": fx if fx != 1 else None,
         "price": _r(price), "shares_cr": _r(shares / CR) if shares else None,
         "market_cap_cr": _r(mcap),
         "ttm_net_profit": _r(ttm_pat), "ttm_sales": _r(ttm_sales),

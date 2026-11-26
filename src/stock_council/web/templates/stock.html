@@ -25,7 +25,7 @@
   </div>
   <div class="grid c3 stats hero3">
     <div><div class="lab"><span>Volume vs usual</span></div><div class="val">{{ s.spike_x or '–' }}<small>×</small></div></div>
-    {% if IS_US %}<div><div class="lab"><span>Off-exchange, 20 days</span></div><div class="val">{{ t.off_exchange_pct_20d|round(0)|int if t.off_exchange_pct_20d is not none else '–' }}<small>%{% if t.off_exchange_pct_20d_1y_median %} vs {{ t.off_exchange_pct_20d_1y_median|round(0)|int }} usual{% endif %}</small></div></div>
+    {% if IS_US %}<div><div class="lab"><span title="Share of volume traded off the exchanges, last 20 days, vs its usual">Off-exchange</span></div><div class="val">{{ t.off_exchange_pct_20d|round(0)|int if t.off_exchange_pct_20d is not none else '–' }}<small>%{% if t.off_exchange_pct_20d_1y_median %} vs {{ t.off_exchange_pct_20d_1y_median|round(0)|int }}{% endif %}</small></div></div>
     {% else %}<div><div class="lab"><span>Delivered today</span></div><div class="val">{{ t.delivery_pct_today|round(0)|int if t.delivery_pct_today is not none else '–' }}<small>%{% if t.delivery_pct_30d_avg %} vs {{ t.delivery_pct_30d_avg|round(0)|int }}{% endif %}</small></div></div>{% endif %}
     <div><div class="lab"><span>Stop-loss zone</span></div><div class="val">{% if v.stop_losses %}{{ M.cur }}{{ '{:,.0f}'.format(v.stop_losses[0]) }}{% if v.stop_losses|length > 1 %}<small>to {{ '{:,.0f}'.format(v.stop_losses[-1]) }}</small>{% endif %}{% else %}–{% endif %}</div></div>
   </div>
@@ -176,7 +176,7 @@
 </div>
 
 {% if peers and peers|length > 1 %}
-{% call fold('Same industry', 'council', (f.industry or peers[0].industry or '') ~ ' · ' ~ peers|length ~ ' companies') %}
+{% call fold('Same industry', 'council', peers|length ~ ' companies') %}
   <div class="tblwrap"><table class="tbl peers">
     <tr><th>Company</th><th>Mkt cap {{ M.cur }} {{ M.unit_label }}</th><th>P/E</th><th>ROE %</th><th>Sales growth %</th><th>1-yr return %</th></tr>
     {% for q in peers %}<tr class="{{ 'me' if q.isin == p.isin }}"><td>{{ (q.name or q.symbol)|nice }}</td><td>{{ '{:,.0f}'.format(q.mcap) if q.mcap == q.mcap else '–' }}</td><td>{{ '%.1f'|format(q.pe) if q.pe == q.pe and q.pe is not none else '–' }}</td><td>{{ '%.1f'|format(q.roe) if q.roe is not none and q.roe == q.roe else '–' }}</td><td class="{{ 'neg' if q.sales_cagr_3y is not none and q.sales_cagr_3y < 0 }}">{{ '%.1f'|format(q.sales_cagr_3y) if q.sales_cagr_3y is not none and q.sales_cagr_3y == q.sales_cagr_3y else '–' }}</td><td class="{{ 'neg' if q.ret_1y < 0 else 'pos' }}">{{ '%.1f'|format(q.ret_1y) if q.ret_1y == q.ret_1y else '–' }}</td></tr>{% endfor %}

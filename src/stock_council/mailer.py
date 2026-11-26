@@ -104,15 +104,24 @@ def _cf(method: str, path: str, **kw) -> dict:
     return r.json()
 
 
-def address_status() -> dict[str, bool]:
-    """Cloudflare only delivers to addresses that clicked its verify link: email -> verified?"""
+_addr_cache: dict = {}
+
+
+def address_status(fresh: bool = False) -> dict[str, bool]:
+    """Cloudflare only delivers to addresses that clicked its verify link: email -> verified?
+    Cached 10 minutes so opening Settings doesn't wait on Cloudflare."""
+    import time
+    if not fresh and _addr_cache.get("at", 0) > time.time() - 600:
+        return _addr_cache["data"]
     d = _cf("GET", "email/routing/addresses")
-    return {x["email"].lower(): bool(x.get("verified")) for x in d.get("result") or []}
+    out = {x["email"].lower(): bool(x.get("verified")) for x in d.get("result") or []}
+    _addr_cache.update(at=time.time(), data=out)
+    return out
 
 
 def ensure_addresses(emails: list[str]) -> list[str]:
     """Register new recipients with Cloudflare, which emails each one a verify link. Returns the new ones."""
-    known = address_status()
+    known = address_status(fresh=True)
     added = []
     for e in emails:
         if e.lower() not in known:

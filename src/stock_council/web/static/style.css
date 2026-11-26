@@ -792,5 +792,5 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 }
 .hero3{grid-template-columns:repeat(3,minmax(0,1fr))!important}
 .hero3 .lab span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@media (max-width:540px){.hero3>div{padding:10px 12px} .hero3 .val{font-size:17px} .hero3 .val small{font-size:11.5px}}
+@media (max-width:540px){.hero3>div{padding:10px 12px} .hero3 .val{font-size:17px} .hero3 .val small{font-size:12px}}
 @media (max-width:540px){.spendrow .nm>span{display:none}}

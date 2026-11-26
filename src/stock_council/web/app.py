@@ -701,7 +701,9 @@ def screener(request: Request):
     shown = [p for p in PRESETS if p["id"] in SHOWN_PRESETS or "preset:" + p["id"] == key]
     return tpl.TemplateResponse(request, "screener.html", {"avg_stock": _avg_stock(),
         "rules": rules, "res": res, "cols": cols, "metrics": METRICS, "presets": shown, "edited_keys": list(state["edits"]),
-        "saved": saved, "active": active, "edited": edited, "nav": "screener"})
+        "saved": saved, "active": active, "edited": edited, "nav": "screener",
+        "deleted": next((t for t in _get_raw(conn, "screens_trash") if t["screen"]["id"] == q.get("deleted")), None),
+        "evening_key": st["schedule"].get("screen")})
 
 
 @app.post("/screener/draft")
@@ -766,14 +768,55 @@ async def screener_save(request: Request):
 
 @app.post("/screener/delete")
 def screener_delete(sid: str = Form(...)):
+    """Delete a saved screen. It goes to a small bin (last 10) so the page can offer Undo; if the evening
+    run used it, the run falls back to the first preset and the page says so."""
     conn = db()
-    save_setting(conn, "screens", [x for x in get_settings(conn).get("screens") or [] if x["id"] != sid])
+    st = get_settings(conn)
+    screens = st.get("screens") or []
+    gone = next((x for x in screens if x["id"] == sid), None)
+    if not gone:
+        return RedirectResponse(B + "/screener", status_code=303)
     state = _screen_state(conn)
-    state["edits"].pop("s:" + sid, None)
+    sched = dict(st["schedule"])
+    was_evening = sched.get("screen") == "s:" + sid
+    if was_evening:
+        sched["screen"] = "preset:" + PRESETS[0]["id"]
+        save_setting(conn, "schedule", sched)
+    trash = [t for t in _get_raw(conn, "screens_trash") if t["screen"]["id"] != sid][-9:]
+    trash.append({"screen": gone, "edits": state["edits"].pop("s:" + sid, None), "was_evening": was_evening,
+                  "fallback": PRESETS[0]["name"]})
+    save_setting(conn, "screens_trash", trash)
+    save_setting(conn, "screens", [x for x in screens if x["id"] != sid])
     if state["last"] == "s:" + sid:
         state["last"] = "preset:" + PRESETS[0]["id"]
     save_setting(conn, "screener_state", state)
-    return RedirectResponse(B + "/screener", status_code=303)
+    return RedirectResponse(B + f"/screener?deleted={sid}", status_code=303)
+
+
+@app.post("/screener/restore")
+def screener_restore(sid: str = Form(...)):
+    conn = db()
+    trash = _get_raw(conn, "screens_trash")
+    t = next((t for t in trash if t["screen"]["id"] == sid), None)
+    if not t:
+        return RedirectResponse(B + "/screener", status_code=303)
+    st = get_settings(conn)
+    screens = [x for x in st.get("screens") or [] if x["id"] != sid] + [t["screen"]]
+    save_setting(conn, "screens", screens)
+    save_setting(conn, "screens_trash", [x for x in trash if x is not t])
+    state = _screen_state(conn)
+    if t.get("edits"):
+        state["edits"]["s:" + sid] = t["edits"]
+    state["last"] = "s:" + sid
+    save_setting(conn, "screener_state", state)
+    if t.get("was_evening"):
+        save_setting(conn, "schedule", {**st["schedule"], "screen": "s:" + sid})
+    return RedirectResponse(B + f"/screener?s={sid}", status_code=303)
+
+
+def _get_raw(conn, key: str) -> list:
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return json.loads(row["value"]) if row else []
 
 
 @app.post("/council")

@@ -263,6 +263,58 @@
           "click": "#sug li.sep:has-text('India')"
         }
       ]
+    },
+    {
+      "name": "A saved screen can be deleted and brought back",
+      "viewport": "390x844",
+      "steps": [
+        {
+          "goto": "/screener?preset=quality"
+        },
+        {
+          "click": "#savebtn"
+        },
+        {
+          "fill": "input[name=name][form=saveform]",
+          "value": "Delete me"
+        },
+        {
+          "click": "#saveas"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "click": "button[aria-label='Delete Delete me']"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "expectText": {
+            "selector": ".undo",
+            "text": "Deleted Delete me"
+          }
+        },
+        {
+          "click": ".undo button"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "expectText": {
+            "selector": ".scr.on",
+            "text": "Delete me"
+          }
+        },
+        {
+          "click": "button[aria-label='Delete Delete me']"
+        },
+        {
+          "wait": 800
+        }
+      ]
     }
   ]
 }

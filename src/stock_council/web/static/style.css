@@ -753,3 +753,13 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 .sug .sep{min-height:0;padding:8px 14px 4px;font-size:12px;color:var(--mute);cursor:default;border-top:1px solid var(--line)}
 .sug .sep:hover{background:none}
 .sug .go{font-size:12px;color:var(--mute)}
+
+/* Saved screens: a delete button on each, and an Undo notice in the page flow (never floating) */
+.scrrow{position:relative;display:flex;flex-direction:column}
+.scrrow .scr{padding-right:44px}
+.scrdel{position:absolute;top:50%;right:2px;transform:translateY(-50%);margin:0}
+.scrdel button{all:unset;box-sizing:border-box;display:grid;place-items:center;width:40px;height:40px;border-radius:8px;color:var(--faint);cursor:pointer}
+.scrdel button:hover,.scrdel button:focus-visible{color:var(--sell);background:var(--raise)}
+@media (max-width:960px){.scrrow{flex:none} .scrdel button{width:44px;height:44px}}
+.undo{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px 10px 16px;margin-bottom:14px;font-size:14px}
+.undo form{margin:0}

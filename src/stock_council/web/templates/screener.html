@@ -7,6 +7,8 @@
 <div class="pagehead"><div><h1>Screener</h1>
   <p>{% if res %}{{ res.universe|num }} traded companies · prices of {{ res.day|day }}{% else %}Find stocks with your own rules{% endif %}</p></div></div>
 
+{% if deleted %}<div class="panel undo" role="status"><span>Deleted <b>{{ deleted.screen.name }}</b>{% if deleted.was_evening %}. The evening run now uses <b>{{ deleted.fallback }}</b>{% endif %}</span>
+  <form method="post" action="{{ B }}/screener/restore"><input type="hidden" name="sid" value="{{ deleted.screen.id }}"><button class="btn">{{ icon('back', 15) }}Undo</button></form></div>{% endif %}
 <div class="scrlayout">
   <nav class="panel screens" aria-label="Screens">
     <div class="ph"><h2>{{ icon('filter', 16) }}Screens</h2></div>
@@ -16,8 +18,11 @@
       {% endfor %}
       {% if saved %}<div class="scrhead">Your screens</div>{% endif %}
       {% for x in saved %}{% set key = 's:' ~ x.id %}
+      <div class="scrrow">
       <a data-noprefetch class="scr {{ 'on' if active.key == key }}" href="{{ B }}/screener?s={{ x.id }}"><b>{{ x.name }}{% if key in edited_keys %}<i class="edot" title="Edited"></i>{% endif %}</b>
-        <span>{% if x.last %}{{ x.last.count }} last night{% if x.last.new %} · {{ x.last.new|length }} new{% endif %}{% elif x.daily %}checked every evening{% else %}saved{% endif %}</span></a>
+        <span>{% if evening_key == key %}evening run · {% endif %}{% if x.last %}{{ x.last.count }} last night{% if x.last.new %} · {{ x.last.new|length }} new{% endif %}{% elif x.daily %}checked every evening{% else %}saved{% endif %}</span></a>
+      <form method="post" action="{{ B }}/screener/delete" class="scrdel"><input type="hidden" name="sid" value="{{ x.id }}"><button type="submit" aria-label="Delete {{ x.name }}" title="Delete">{{ icon('trash', 16) }}</button></form>
+      </div>
       {% endfor %}
     </div>
   </nav>

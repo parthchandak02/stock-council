@@ -93,3 +93,11 @@
     });
   });
 })();
+
+// Phone: the screen list is a sideways strip; bring the open screen into view (without moving the page).
+(function () {
+  const list = document.querySelector('.scrlist'), on = list && list.querySelector('.scr.on');
+  if (!on || list.scrollWidth <= list.clientWidth) return;
+  const row = on.closest('.scrrow') || on;
+  list.scrollLeft = Math.max(0, row.offsetLeft - list.offsetLeft - 8);
+})();

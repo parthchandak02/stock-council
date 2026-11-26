@@ -73,6 +73,7 @@
     <div><dt>RSI (14)</dt><dd>{{ t.rsi_14 }}</dd></div>
     <div><dt>Volume: week vs year</dt><dd>{{ n(t.volume_1w_avg) }} vs {{ n(t.volume_1y_avg) }}</dd></div>
     {% if not IS_US %}<div><dt>Delivery today / 30-day</dt><dd>{{ n(t.delivery_pct_today, '%') }} / {{ n(t.delivery_pct_30d_avg, '%') }}</dd></div>{% endif %}
+    {% if IS_US %}<div><dt>Off-exchange 20-day / usual</dt><dd>{{ n(t.off_exchange_pct_20d, '%') }} / {{ n(t.off_exchange_pct_20d_1y_median, '%') }}</dd></div>{% endif %}
     <div><dt>Range before the spike</dt><dd>{{ n(t.range_60d_before_spike_pct, '%') }} <span class="muted">in 60 days</span></dd></div>
   </dl>
   <div class="tblwrap"><table class="tbl">

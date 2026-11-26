@@ -14,7 +14,7 @@
 <section class="panel tonight">
   <div class="tn-top">
     <span class="faint">{% if run %}{{ run.day|day }}{% if fn.screen %} · {{ fn.screen }}{% endif %}{% else %}No screen yet{% endif %}</span>
-    {% if run %}<a class="tn-how" href="{{ B }}/run/{{ run.id }}">of {{ (fn.companies or 0)|num }} {{ icon('chev', 14) }}</a>{% endif %}
+    {% if run %}<a class="tn-how" href="{{ B }}/run/{{ run.id }}">{{ (fn.companies or 0)|num }} screened {{ icon('chev', 14) }}</a>{% endif %}
   </div>
   <h1 class="tn-big">{% if run %}{{ picks|length }} worth a look{% else %}Today{% endif %}</h1>
   {% if run and picks %}

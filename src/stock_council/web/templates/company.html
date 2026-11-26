@@ -36,12 +36,12 @@
         {{ tile('ROCE', (m.roce|f1), '%') }}
         {{ tile('Sales growth, 3 yr', (m.sales_cagr_3y|f1), '%/yr') }}
         {{ tile('Profit growth, 3 yr', (m.profit_cagr_3y|f1), '%/yr') }}
-        {{ tile('P/B', m.pb|f2) }}
+        {% if not IS_US %}{{ tile('P/B', m.pb|f2) }}{% endif %}
         {{ tile('Dividend yield', (m.div_yield|f1), '%') }}
         {{ tile('From 52-week high', (m.from_high|f1), '%') }}
         {{ tile('1-year return', (m.ret_1y|f1), '%') }}
         {{ tile('Volume vs usual', (m.spike_x|f1), '×') }}
-        {% if not IS_US %}{{ tile('Delivered today', (m.delivery|f1), '%') }}{% else %}{{ tile('Short interest', (m.short_float|f1), '% of float') }}{% endif %}
+        {% if not IS_US %}{{ tile('Delivered today', (m.delivery|f1), '%') }}{% else %}{{ tile('Short interest', (m.short_float|f1), '% of float') }}{{ tile('Off-exchange, 20 days', (m.offex_20d|f1), '%') }}{% endif %}
       </div>
     </section>
     <div id="results-slot" data-src="{{ B }}/company/{{ c.isin }}/results"><section class="panel"><div class="pb muted small">{{ icon('spin', 14, 'spin') }} Loading yearly and quarterly results…</div></section></div>

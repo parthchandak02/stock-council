@@ -72,6 +72,26 @@ def technicals(conn, isin: str) -> dict:
     }
 
 
+def _offex_facts(conn, symbol: str) -> dict:
+    """US: off-exchange share of volume from FINRA (stand-in for India's delivery %, not the same thing:
+    it says where trades happened, not whether shares were kept)."""
+    try:
+        rows = conn.execute(
+            "SELECT o.date, o.off_vol, d.volume FROM offex o JOIN daily d ON d.date=o.date AND d.symbol=o.symbol "
+            "WHERE o.symbol=? ORDER BY o.date DESC LIMIT 260", (symbol,)).fetchall()
+    except Exception:
+        return {}
+    pts = [(r["date"], r["off_vol"], r["volume"]) for r in rows if r["volume"] and r["off_vol"] is not None and r["off_vol"] <= r["volume"] * 1.05]
+    if len(pts) < 10:
+        return {}
+    pct = lambda xs: round(100 * sum(o for _, o, _ in xs) / sum(v for _, _, v in xs), 1)
+    roll = sorted(pct(pts[i:i + 20]) for i in range(0, max(1, len(pts) - 19)))
+    return {"off_exchange_pct_day": pct(pts[:1]), "off_exchange_day": pts[0][0],
+            "off_exchange_pct_20d": pct(pts[:20]), "off_exchange_pct_20d_1y_median": roll[len(roll) // 2],
+            "off_exchange_note": "FINRA off-exchange share of volume (dark pools and wholesalers); "
+                                 "a fall against its own median means more trading moved onto the exchanges"}
+
+
 def build(symbol: str, nse: NSE | None = None) -> dict:
     conn = connect()
     isin = _isin_for(conn, symbol)
@@ -86,6 +106,7 @@ def build(symbol: str, nse: NSE | None = None) -> dict:
         from .us_extras import extras
         sheet["fundamentals"] = upgrade(sheet["fundamentals"], ident.get("cik"))   # official 10-K years
         sheet.update(extras(conn, ident, sheet["fundamentals"]))
+        tech.update(_offex_facts(conn, isin))
     elif ident["nse_symbol"]:
         key = f"nse:{ident['nse_symbol']}"
         disc = cache_get(conn, key, max_age_days=2)

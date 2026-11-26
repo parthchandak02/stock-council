@@ -12,16 +12,23 @@
 {%- endmacro %}
 
 {# Yearly / quarterly results as bar charts (finbars.js), from a fundamentals dict #}
-{% macro fin(f) -%}
+{% macro fin(f, folded=False) -%}
 {% set yrs = [] %}{% for a in (f.annual or [])[:6] %}{% set _ = yrs.append({'t': a.get('fy_end'), 'sales': a.get('sales'), 'net_profit': a.get('net_profit'), 'operating_cash_flow': a.get('operating_cash_flow'), 'free_cash_flow': a.get('free_cash_flow'), 'cash_ratio': a.get('cfo_to_profit_plus_dep_pct'), 'de': a.get('debt_to_equity'), 'cycle': a.get('cash_conversion_cycle_days')}) %}{% endfor %}
 {% set qs = [] %}{% for q in (f.quarters or [])[:8] %}{% set _ = qs.append({'t': q.get('quarter_end'), 'sales': q.get('sales'), 'net_profit': q.get('net_profit')}) %}{% endfor %}
 {% if yrs or qs %}
+{% set seg %}<div class="seg"><button type="button" data-v="year">Yearly</button><button type="button" data-v="quarter">Quarterly</button><button type="button" data-v="health">Health</button></div>{% endset %}
+{% if folded %}{% set y0 = yrs[0] if yrs else {} %}
+<details class="panel fold fin" id="fin" data-keep data-fin='{{ {"year": yrs, "quarter": qs}|tojson }}' data-cur="{{ M.cur }}" data-unit="{{ M.unit_label }}">
+  <summary class="ph"><h2>{{ icon('chart', 16) }}Results</h2><span class="r"><span class="fold-sum">{% if y0.sales is not none and y0.sales is defined %}{{ 'FY' ~ (y0.t or '')[2:4] if y0.t }} sales {{ M.cur }}{{ '{:,.0f}'.format(y0.sales) }} {{ M.unit_label }}{% endif %}</span>{{ icon('chevdown', 14, 'tw') }}</span></summary>
+  <div class="ph sub">{{ seg }}</div>
+{% else %}
 <section class="panel fin" id="fin" data-keep data-fin='{{ {"year": yrs, "quarter": qs}|tojson }}' data-cur="{{ M.cur }}" data-unit="{{ M.unit_label }}">
   <div class="ph"><h2>{{ icon('chart', 16) }}Results</h2>
-    <div class="seg"><button type="button" data-v="year">Yearly</button><button type="button" data-v="quarter">Quarterly</button><button type="button" data-v="health">Health</button></div></div>
+    {{ seg }}</div>
+{% endif %}
   <div class="fin-body"></div>
   <div class="fin-tip" hidden></div>
   <div class="panel-foot"><span class="faint small">{{ M.cur }} {{ M.unit_label }}{% if f.annual_source %} · {{ f.annual_source }}{% endif %} · tap a bar for its value</span></div>
-</section>
+{% if folded %}</details>{% else %}</section>{% endif %}
 {% endif %}
 {%- endmacro %}

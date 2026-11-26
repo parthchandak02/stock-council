@@ -176,3 +176,13 @@
   list.addEventListener('click', e => { const li = e.target.closest('li[data-i]'); if (li) go(items[+li.dataset.i]); });
   input.addEventListener('blur', () => setTimeout(close, 150));
 })();
+
+// Keep the search bar glued under the top bar, whose height depends on the screen.
+(function () {
+  const top = document.querySelector('header.top, .top');
+  if (!top || !window.ResizeObserver) return;
+  new ResizeObserver(() => document.documentElement.style.setProperty('--toph', top.offsetHeight + 'px')).observe(top);
+})();
+
+// Charts inside a fold are drawn for their real width once it opens.
+document.addEventListener('toggle', e => { if (e.target.matches && e.target.matches('details.fold[open]')) window.dispatchEvent(new Event('resize')); }, true);

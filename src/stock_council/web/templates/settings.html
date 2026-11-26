@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_ui.html" import icon, gauge %}
+{% extends "base.html" %}{% from "_ui.html" import icon, gauge, fold %}
 {% block title %}Settings · Stock Council{% endblock %}
 {% block main %}
 <form method="post" action="{{ B }}/settings" class="settings" style="display:flex;flex-direction:column;gap:inherit">
@@ -25,9 +25,9 @@
     </div>
   </section>
 
-  <section class="panel" id="whatsapp">
-    <div class="ph"><h2>{{ icon('council', 16) }}Messages</h2></div>
-    {% set em = st.email %}
+  {% set em = st.email %}
+  {% set msum %}WhatsApp {{ 'on' if st.whatsapp.enabled else 'off' }} · email {{ 'on' if em.enabled else 'off' }}{% endset %}
+  {% call fold('Messages', 'council', msum, 'whatsapp') %}
     <div class="set">
       <label><span class="t"><b>Post the evening list on WhatsApp</b><span>To "Invest · Stock &amp; ETF Screen", sent by Hermes</span></span>
         <input type="checkbox" name="wa_on" value="1" {{ 'checked' if st.whatsapp.enabled }} class="switch"></label>
@@ -41,10 +41,10 @@
         {% if addr_status is not none and (em.to or em.cc) %}<div class="addr">{% for a in em.to + em.cc %}{% set ok = addr_status.get(a|lower) %}<span class="chip {{ 'buy' if ok else 'hold' }}">{{ a }} · {{ 'verified' if ok else 'not verified' }}</span>{% endfor %}</div>{% endif %}
       </div>
     </details>
-  </section>
+  {% endcall %}
 
-  <section class="panel" id="costs">
-    <div class="ph"><h2>{{ icon('wallet', 16) }}AI costs</h2><span class="r">last 30 days</span></div>
+  {% set csum %}{{ spend.month|usd }} this month{% endset %}
+  {% call fold('AI costs', 'wallet', csum, 'costs') %}
     <div class="set">
       <label><span class="t"><b>Show costs on the site</b><span>What each AI call cost, on stock, run and history pages</span></span>
         <input type="checkbox" name="costs_on" value="1" {{ 'checked' if st.telemetry.show_costs }} class="switch"></label>
@@ -65,20 +65,21 @@
         <span>{{ r.calls }}</span><span>{{ r.avg_cost|usd }}</span><span class="c">{{ r.cost|usd }}</span></div>
       {% else %}<div class="muted small">No AI calls yet.</div>{% endfor %}
     </div>
-    <div class="panel-foot"><span class="faint small">Exact cost of each call, as reported by OpenRouter. Tokens are logged from 24 Nov on.</span></div>
-  </section>
+    <div class="panel-foot"><span class="faint small">Last 30 days. Exact cost of each call, as reported by OpenRouter. Tokens are logged from 24 Nov on.</span></div>
+  {% endcall %}
 </div>
 
 <div class="col">
 
-  <details class="panel prompt" id="prompt">
+  <details class="panel fold prompt" id="prompt">
     <summary class="ph"><h2>{{ icon('council', 16) }}Question for the council</h2><span class="r">{{ st.prompt.count('\n') + 1 }} lines {{ icon('chevdown', 14, 'tw') }}</span></summary>
     <p class="faint small" style="padding:10px 16px 0">Every AI gets this, the fact sheet and the news. Changing it makes new scores less comparable with old ones.</p>
     <textarea name="prompt" rows="14" aria-label="Question for the council">{{ st.prompt }}</textarea>
+    <div class="panel-foot"><button class="btn ghost" name="reset" value="prompt">Restore original question</button></div>
   </details>
 
   {% if not IS_US %}
-  <details class="panel" id="broker">
+  <details class="panel fold" id="broker">
     <summary class="ph"><h2>{{ icon('mail', 16) }}Broker orders</h2><span class="r">{{ st.accounts|length }} accounts {{ icon('chevdown', 14, 'tw') }}</span></summary>
     <div class="pb" style="display:grid;gap:12px">
       <label class="field">Broker email addresses, comma separated<textarea name="broker_to" rows="2">{{ st.broker_to }}</textarea></label>
@@ -92,8 +93,8 @@
 
   {% set avg = {} %}{% for r in spend.by_model %}{% set _ = avg.update({r.model: r.avg_cost}) %}{% endfor %}
   {% set est = {} %}{% for m in catalogue %}{% set _ = est.update({m.id: m.est}) %}{% endfor %}
-<section class="panel" id="members">
-    <div class="ph"><h2>{{ icon('council', 16) }}Council</h2><span class="r">{{ st.models|length }} voting</span></div>
+{% set vsum %}{{ st.models|length }} voting · thinking {{ st.thinking|title }}{% endset %}
+{% call fold('Council', 'council', vsum, 'members') %}
     <div class="set">
       <label><span class="t"><b>Thinking level</b><span>For every AI set to "Default". More thinking: slower, a bit dearer</span></span>
         <select name="thinking" aria-label="Default thinking level">{% for e in efforts %}<option value="{{ e }}" {{ 'selected' if st.thinking == e }}>{{ e|title }}</option>{% endfor %}</select></label>
@@ -121,9 +122,9 @@
         <button type="button" class="rm" aria-label="Remove">{{ icon('x', 15) }}</button></div></template>
     <div class="panel-foot"><button type="button" class="btn ghost" id="addmember">{{ icon('plus', 15) }}Add a model</button>
       <span class="faint small">Switch off to pause a model without losing it. Cost is per stock.</span></div>
-  </section>
+  {% endcall %}
 
-<div class="savebar"><button class="btn ghost" name="reset" value="prompt">Restore original question</button><noscript><button class="btn">Save</button></noscript></div>
+<noscript><div class="savebar"><button class="btn">Save</button></div></noscript>
 </form>
 {% endblock %}
 {% block scripts %}<script src="/static/settings.js?v={{ BUILD }}"></script>{% endblock %}

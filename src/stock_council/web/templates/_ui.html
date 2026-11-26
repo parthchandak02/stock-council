@@ -70,3 +70,11 @@
 <svg class="spark {{ 'up' if vals[-1] >= vals[0] else 'down' }}" viewBox="0 0 {{ w }} {{ h }}" width="{{ w }}" height="{{ h }}" aria-label="3-month trend: {{ '%+.1f'|format((vals[-1] / vals[0] - 1) * 100) }}%" role="img"><polyline points="{% for v in vals %}{{ '%.1f'|format(1 + loop.index0 * (w - 2) / (n - 1)) }},{{ '%.1f'|format(h - 2 - (v - lo) / sp * (h - 4)) }} {% endfor %}"/></svg>
 {%- endif -%}
 {%- endmacro %}
+
+{# A panel that shows one quiet line (title + summary) and opens on tap. Use with {% call fold(...) %}…{% endcall %}. #}
+{% macro fold(title, ic, sum='', id='', cls='', open=False, attrs='') -%}
+<details class="panel fold {{ cls }}"{% if id %} id="{{ id }}"{% endif %}{{ ' open' if open }} {{ attrs|safe }}>
+  <summary class="ph"><h2>{{ icon(ic, 16) }}{{ title }}</h2><span class="r"><span class="fold-sum">{{ sum }}</span>{{ icon('chevdown', 14, 'tw') }}</span></summary>
+  {{ caller() }}
+</details>
+{%- endmacro %}

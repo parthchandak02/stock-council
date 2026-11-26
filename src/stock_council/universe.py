@@ -98,6 +98,9 @@ if IS_US:   # US ownership: no promoter/pledge; insiders, institutions and short
         "insiders": ("Insider holding", "Owners", "%", "Officers, directors, 10% owners"),
         "institutions": ("Institutional holding", "Owners", "%", "Funds and other institutions"),
         "short_float": ("Short interest", "Owners", "% float", "Shares sold short, % of float"),
+        "offex": ("Off-exchange today", "Price & volume", "%", "Share of volume traded off the exchanges (FINRA); US stand-in for delivery"),
+        "offex_20d": ("Off-exchange, 20-day", "Price & volume", "%", "Off-exchange share over the last 20 days"),
+        "offex_chg": ("Off-exchange vs usual", "Price & volume", "pts", "20-day off-exchange share minus its 1-year median; below 0 = more trading on the exchanges"),
         "short_days": ("Days to cover", "Owners", "days", "Short position ÷ average daily volume"),
         "short_chg": ("Short interest change, 1 mo", "Owners", "%", "This month's short position vs last month's"),
         "insiders_chg": ("Insider holding change, 3 mo", "Owners", "pts", "From weekly snapshots since 25 Nov 2026; blank until 3 months of history"),
@@ -120,7 +123,9 @@ PRESETS = [
 if IS_US:   # the same ideas sized for the US ($ millions), plus US-flavoured ones
     PRESETS = [
         {"id": "volume-shock", "name": "Volume shock", "desc": "Big volume on solid businesses",
-         "rules": [["spike_x", ">", 6], ["turnover_cr", ">", 1], ["mcap", ">", 300], ["pe", "<", 40], ["roe", ">", 12], ["de", "<", 1]]},
+         # India's six rules, sized for the US: weekly volume spikes are smaller in big US stocks, so 2.5x
+         # finds about as many a day (9 on average over 20 days to 25 Nov 2026, never none) as 6x does in India.
+         "rules": [["spike_x", ">", 2.5], ["turnover_cr", ">", 1], ["mcap", ">", 300], ["pe", "<", 40], ["roe", ">", 12], ["de", "<", 1]]},
         {"id": "quality", "name": "Quality at a fair price", "desc": "High returns, low debt, not expensive",
          "rules": [["roe", ">", 15], ["roce", ">", 15], ["de", "<", 0.5], ["pe", "<", 30], ["mcap", ">", 1000]]},
         {"id": "growers", "name": "Fast growers", "desc": "Sales and profit up 20%+ a year",
@@ -281,7 +286,10 @@ def price_metrics(conn) -> tuple[str, pd.DataFrame]:
     from .config import DATA_DIR, MARKET
     day = conn.execute("SELECT max(date) FROM daily").fetchone()[0]
     rows = conn.execute("SELECT count(*) FROM daily WHERE date=?", (day,)).fetchone()[0]
-    latest = f"{day}-{rows}-v2"  # prices still arriving for the day -> a new key, never a frozen half-day
+    latest = f"{day}-{rows}-v3"  # prices still arriving for the day -> a new key, never a frozen half-day
+    if IS_US:                    # FINRA's file lands after our prices: its arrival is a new key too
+        from .offex import latest_day
+        latest += "-" + (latest_day(conn) or "none")
     if _pm_cache.get("day") == latest:
         return _pm_cache["val"]
     with _pm_lock:
@@ -307,6 +315,23 @@ def price_metrics(conn) -> tuple[str, pd.DataFrame]:
                 log.warning("price metrics not saved to disk: %s", e)
         _pm_cache.update(day=latest, val=val)
         return val
+
+
+def _offex(conn, vol: pd.DataFrame, since: str) -> pd.DataFrame:
+    """US stand-in for delivery: off-exchange share of volume (FINRA), its 20-day level, and that level
+    against the stock's own last year (percentage points). Latest FINRA day may be a day behind prices."""
+    try:
+        o = pd.read_sql_query("SELECT date, symbol isin, off_vol FROM offex WHERE date >= ?", conn, params=(since,))
+    except Exception:
+        return pd.DataFrame()
+    if o.empty:
+        return pd.DataFrame()
+    off = o.pivot_table(index="date", columns="isin", values="off_vol", aggfunc="sum").sort_index()
+    v = vol.reindex(index=off.index, columns=off.columns)
+    pct = (off / v * 100).where((v > 0) & (off <= v * 1.05)).clip(upper=100)   # bad days (volume revised) drop out
+    roll = (off.rolling(20, min_periods=10).sum() / v.where(off.notna()).rolling(20, min_periods=10).sum() * 100).clip(upper=100)
+    return pd.DataFrame({"offex": pct.iloc[-1], "offex_20d": roll.iloc[-1],
+                         "offex_chg": roll.iloc[-1] - roll.median()})
 
 
 def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
@@ -344,6 +369,8 @@ def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
         "delivery": last["dq"] / last["vol"] * 100,
         "delivery_30d": (dq.tail(30).sum() / vol.tail(30).where(dq.tail(30).notna()).sum()) * 100,
     })
+    if IS_US:
+        out = out.join(_offex(conn, vol, dates[-1]), how="left")
     # 3-month trend for list sparklines: ~63 closes, thinned to 32 points
     tail = close.tail(63)
     out["spark"] = pd.Series({k: [round(float(x), 4) for x in tail[k].dropna().values[::2]] for k in tail.columns})

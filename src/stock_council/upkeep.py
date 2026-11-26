@@ -20,7 +20,13 @@ def _step(name, fn, *a, **kw):
 def before_screen() -> dict:
     """Things the screen and fact sheets depend on: splits/bonuses, announcements, fresh results."""
     from . import actions, filings
-    return {
+    from .config import IS_US
+    out = {}
+    if IS_US:   # FINRA's off-exchange volume (the US stand-in for delivery): the days we don't have yet
+        from . import offex
+        from .daily import db
+        out["off_exchange"] = _step("off-exchange volume", offex.sync, db())
+    return out | {
         "splits_bonuses": _step("corporate actions", actions.update, days_back=40),
         "announcements": _step("announcements", filings.update_announcements, days=2),
         "results_refresh": _step("results-day refresh", filings.refresh_results, days=3),

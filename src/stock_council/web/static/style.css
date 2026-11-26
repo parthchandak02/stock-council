@@ -546,7 +546,7 @@ select{font:inherit;font-weight:500;font-size:14px;color:var(--ink);background:v
   input[type=checkbox].switch{width:48px;height:28px}
   input[type=checkbox].switch::after{width:22px;height:22px}
   input[type=checkbox].switch:checked::after{left:23px;width:22px;height:22px}
-  .mkt a{min-height:36px}
+  .mkt a{min-height:44px} .srch-btn{width:44px;height:44px}
   .brand{min-height:44px;min-width:44px;justify-content:center}
   .anns a{display:inline-block;padding:10px 0}
   .ph .r .btn,.acts .btn{min-height:40px}
@@ -763,3 +763,34 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 @media (max-width:960px){.scrrow{flex:none} .scrdel button{width:44px;height:44px}}
 .undo{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px 10px 16px;margin-bottom:14px;font-size:14px}
 .undo form{margin:0}
+/* the search bar sits right under the top bar, whatever its height (44 px taps on phones make it taller) */
+.srch{top:var(--toph,57px)}
+
+/* Folds: a panel that is one quiet line until tapped (stock page, Settings) */
+.fold>summary.ph{min-height:52px}
+.fold>summary .r{font-family:var(--sans);font-size:13px;min-width:0}
+.fold .fold-sum{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw}
+.fold .tw{transition:transform .2s}
+.fold[open]>summary .tw{transform:rotate(180deg)}
+.fold:not([open])>summary .fold-sum{color:var(--mute)}
+.fold[open]>summary .fold-sum{display:none}
+.ph.sub{border-bottom:0;min-height:0;padding:10px 16px 0;justify-content:flex-start}
+@media (max-width:540px){.fold .fold-sum{max-width:46vw}}
+/* "To watch": only the numbers that need a look, one row each */
+.watch{display:flex;flex-direction:column}
+.wrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line)}
+.wrow .wl{font-size:14px;min-width:0}
+.wrow .wv{font:500 15px var(--mono)} .wrow .wv small{font-size:12px;color:var(--mute);margin-left:2px}
+.allnums>div.grid{padding:0}
+.allnums{border-top:0}
+/* Stock page: open sections first (chart, to watch, the AIs), then the quiet folds; one column on phones */
+.two.stockcols>.col>*{order:5}
+.two.stockcols .pchart{order:1} .two.stockcols .towatch{order:2} .two.stockcols .aisaid{order:3} .two.stockcols #news{order:6}
+@media (max-width:960px){
+  .two.stockcols{display:flex;flex-direction:column;align-items:stretch;gap:14px}
+  .two.stockcols>.col{display:contents}
+}
+.hero3{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.hero3 .lab span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:540px){.hero3>div{padding:10px 12px} .hero3 .val{font-size:17px} .hero3 .val small{font-size:11.5px}}
+@media (max-width:540px){.spendrow .nm>span{display:none}}

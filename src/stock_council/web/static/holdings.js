@@ -156,6 +156,8 @@
     .then(d => {
       if (!d.quarters || !d.quarters.length) { body.innerHTML = '<p class="muted small">No shareholding filings found for this company.</p>'; return; }
       prepare(d.quarters); render();
+      const sum = box.querySelector('.fold-sum'), q = d.quarters[d.quarters.length - 1] || {};   // folded: say the split in one line
+      if (sum) sum.textContent = [['Promoters', q.promoter], ['FIIs', q.fii]].filter(x => x[1] != null).map(x => `${x[0]} ${Math.round(x[1])}%`).join(' · ');
     })
     .catch(() => { body.innerHTML = '<p class="muted small">Couldn\'t load the shareholding filings right now.</p>'; });
 })();

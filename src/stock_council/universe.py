@@ -371,6 +371,9 @@ def _price_metrics(conn) -> tuple[str, pd.DataFrame]:
     })
     if IS_US:
         out = out.join(_offex(conn, vol, dates[-1]), how="left")
+        for k in ("offex", "offex_20d", "offex_chg"):   # no FINRA data yet: blank columns, never missing ones
+            if k not in out.columns:
+                out[k] = float("nan")
     # 3-month trend for list sparklines: ~63 closes, thinned to 32 points
     tail = close.tail(63)
     out["spark"] = pd.Series({k: [round(float(x), 4) for x in tail[k].dropna().values[::2]] for k in tail.columns})

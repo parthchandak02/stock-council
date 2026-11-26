@@ -174,8 +174,8 @@ def mcap(x) -> str:
 
 
 tpl.env.filters["mcap"] = mcap
-tpl.env.filters["f1"] = lambda x: None if x is None or x != x else f"{x:.1f}"
-tpl.env.filters["f2"] = lambda x: None if x is None or x != x else f"{x:.2f}"
+tpl.env.filters["f1"] = lambda x: None if x is None or isinstance(x, _Undefined) or x != x else f"{x:.1f}"
+tpl.env.filters["f2"] = lambda x: None if x is None or isinstance(x, _Undefined) or x != x else f"{x:.2f}"
 tpl.env.globals.update(group=lambda v: VOTE_GROUP.get(str(v or "").lower(), ""), short_name=short_name,
                        key_numbers=key_numbers,
                        FILTER_LABELS=FILTER_LABELS)

@@ -288,43 +288,53 @@ def sync_institutions(conn) -> dict:
         filers = {per: {f for f, p in acc_info.values() if p == per} for per in (cur, prev)}
         both = filers[cur] & filers[prev]
         keep = {a: p for a, (f, p) in acc_info.items() if f in both and p in (cur, prev)}
-        # pass 2: shares per CUSIP per quarter, matched filers only (stream: the table is ~4M rows)
-        sums = {cur: {}, prev: {}}
-        common = {}
+        # pass 2: which CUSIPs are held in both quarters (cheap counts), mapped to tickers once (cached)
+        common: dict[str, int] = {}
         for p in paths:
-            z = zipfile.ZipFile(p)
-            for r in _tsv(z, "INFOTABLE.tsv"):
-                per = keep.get(r["ACCESSION_NUMBER"])
-                if not per or r.get("SSHPRNAMTTYPE") != "SH" or (r.get("PUTCALL") or "").strip():
-                    continue
-                c = (r.get("CUSIP") or "").upper()
-                if len(c) != 9:
+            for r in _tsv(zipfile.ZipFile(p), "INFOTABLE.tsv"):
+                if r["ACCESSION_NUMBER"] in keep and r.get("SSHPRNAMTTYPE") == "SH" and not (r.get("PUTCALL") or "").strip():
+                    c = (r.get("CUSIP") or "").upper()
+                    if len(c) == 9:
+                        common[c] = common.get(c, 0) + 1
+        have = {r[0]: r[1] for r in conn.execute("SELECT cusip, ticker FROM cusip_map")}
+        todo = [c for c, n in common.items() if n >= 6 and c not in have]
+        if todo:
+            got = _figi(todo)
+            conn.executemany("INSERT OR REPLACE INTO cusip_map VALUES (?,?,?)",
+                             [(c, t, date.today().isoformat()) for c, t in got.items()])
+            conn.commit()
+            have.update(got)
+        ours = {r[0] for r in conn.execute("SELECT isin FROM universe")}
+        tick = {c: t for c, t in have.items() if t and t in ours}
+        # pass 3: each fund's position in each of our stocks, both quarters. Funds' filings contain errors
+        # (one pension fund reported 7 billion Nvidia shares in June 2026 vs 37 million in March), and some
+        # list a stock under a different CUSIP one quarter, so: count only positions held in BOTH quarters
+        # and drop any that moved more than 5x either way.
+        per = {cur: 0, prev: 1}
+        pos: dict[tuple, list] = {}
+        for p in paths:
+            for r in _tsv(zipfile.ZipFile(p), "INFOTABLE.tsv"):
+                q = keep.get(r["ACCESSION_NUMBER"])
+                t = tick.get((r.get("CUSIP") or "").upper())
+                if q is None or not t or r.get("SSHPRNAMTTYPE") != "SH" or (r.get("PUTCALL") or "").strip():
                     continue
                 try:
-                    sums[per][c] = sums[per].get(c, 0.0) + float(r.get("SSHPRNAMT") or 0)
+                    v = float(r.get("SSHPRNAMT") or 0)
                 except ValueError:
                     continue
-                common[c] = common.get(c, 0) + 1
+                k = (acc_info[r["ACCESSION_NUMBER"]][0], t)
+                x = pos.get(k)
+                if x is None:
+                    x = pos[k] = [0.0, 0.0]
+                x[per[q]] += v
     finally:
         for p in paths:
             p.unlink(missing_ok=True)
-    # CUSIP -> ticker, for CUSIPs held by a few funds in both quarters (common shares of listed companies)
-    cands = [c for c in common if c in sums[cur] and c in sums[prev] and common[c] >= 6]
-    have = {r[0]: r[1] for r in conn.execute("SELECT cusip, ticker FROM cusip_map")}
-    todo = [c for c in cands if c not in have]
-    if todo:
-        got = _figi(todo)
-        conn.executemany("INSERT OR REPLACE INTO cusip_map VALUES (?,?,?)",
-                         [(c, t, date.today().isoformat()) for c, t in got.items()])
-        conn.commit()
-        have.update(got)
-    ours = {r[0] for r in conn.execute("SELECT isin FROM universe")}
     by_t: dict[str, list] = {}
-    for c in cands:
-        t = have.get(c)
-        if t and t in ours:
+    for (f, t), (c, pv) in pos.items():
+        if c > 0 and pv > 0 and 0.2 < c / pv < 5:
             a = by_t.setdefault(t, [0.0, 0.0, 0])
-            a[0] += sums[cur][c]; a[1] += sums[prev][c]; a[2] += common[c]
+            a[0] += c; a[1] += pv; a[2] += 1
     conn.execute("DELETE FROM inst_change")
     conn.executemany("INSERT INTO inst_change VALUES (?,?,?,?,?,?)",
                      [(t, cur, prev, a[0], a[1], a[2]) for t, a in by_t.items()])

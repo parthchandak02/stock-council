@@ -7,7 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 TMP=$(mktemp -d /tmp/sc-deploy.XXXX)
 stop() { for p in 8398 8399; do pid=$(ss -ltnp | grep ":$p " | grep -o 'pid=[0-9]*' | cut -d= -f2 | head -1); [ -n "$pid" ] && kill "$pid"; done; rm -rf "$TMP"; }
-trap stop EXIT
+trap stop EXIT INT TERM HUP
+find /tmp -maxdepth 1 -name "sc-deploy.*" -mmin +60 -exec rm -rf {} + 2>/dev/null || true   # copies left by a killed run
 echo "copying data..."
 sqlite3 /srv/stock-council/data/stock-council.db ".backup $TMP/stock-council.db"
 sqlite3 /srv/stock-council/data/us.db ".backup $TMP/us.db"

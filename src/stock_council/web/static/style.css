@@ -813,3 +813,4 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 .hrow .nm span{font:12.5px var(--mono);color:var(--faint);flex:none}
 .hrow .chev{color:var(--faint)}
 .howread .readrow{gap:10px}
+.hrow .nm{overflow:hidden} .hrow .nm b{max-width:100%}

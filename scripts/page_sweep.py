@@ -12,7 +12,7 @@ from stock_council.web.app import app
 c = TestClient(app, raise_server_exceptions=False)
 mk = os.environ.get("SC_MARKET", "in")
 db = sqlite3.connect(os.path.join(os.environ["SC_DATA_DIR"], "us.db" if mk == "us" else "stock-council.db"))
-urls = ["/", "/screener", "/how", "/history", "/track", "/settings", "/version", "/healthz"]
+urls = ["/", "/screener", "/history", "/track", "/settings", "/version", "/healthz"]
 urls += [f"/run/{r}" for (r,) in db.execute("select id from runs")]
 urls += [f"/run/{r}/live" for (r,) in db.execute("select id from runs")]
 urls += [f"/stock/{r}/{i}" for r, i in db.execute("select run_id, isin from picks")]

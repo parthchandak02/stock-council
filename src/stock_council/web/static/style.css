@@ -797,3 +797,19 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 /* score tiles: as many per row as fit with whole names (9 members: 5 + 4 on a phone, one row on desktop) */
 .slots{grid-template-columns:repeat(auto-fill,minmax(58px,1fr))}
 .fold>summary.ph{flex-wrap:nowrap} .fold>summary h2{flex:none}
+/* How it works, inside Settings */
+.howsteps{list-style:none;margin:0;padding:6px 0;counter-reset:st}
+.howsteps li{display:grid;grid-template-columns:64px minmax(0,1fr);gap:12px;padding:9px 16px;font-size:14px;counter-increment:st}
+.howsteps li b{font-weight:600} .howsteps li span{color:var(--mute)}
+.howread{border-top:1px solid var(--line);padding:6px 0}
+.howread .readrow{padding:7px 16px}
+/* History: runs grouped by day, one line each, result on the right */
+.hlist{display:flex;flex-direction:column;padding-bottom:4px}
+.hlist .grp{color:var(--mute);font-weight:500;padding:12px 16px 4px}
+.hrow{display:grid;grid-template-columns:minmax(0,1fr) auto 16px;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.hrow:hover{background:var(--raise)}
+.hrow .nm{display:flex;align-items:baseline;gap:8px;min-width:0}
+.hrow .nm b{font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.hrow .nm span{font:12.5px var(--mono);color:var(--faint);flex:none}
+.hrow .chev{color:var(--faint)}
+.howread .readrow{gap:10px}

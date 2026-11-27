@@ -5,7 +5,6 @@
   "routes": [
     "/",
     "/screener",
-    "/how",
     "/history",
     "/track",
     "/settings",

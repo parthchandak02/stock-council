@@ -186,3 +186,9 @@
 
 // Charts inside a fold are drawn for their real width once it opens.
 document.addEventListener('toggle', e => { if (e.target.matches && e.target.matches('details.fold[open]')) window.dispatchEvent(new Event('resize')); }, true);
+
+// A link to #section opens that fold (old /how links land on Settings' "How it works").
+(function () {
+  const open = () => { const d = location.hash && document.getElementById(location.hash.slice(1)); if (d && d.tagName === 'DETAILS') { d.open = true; d.scrollIntoView({block: 'start'}); } };
+  open(); window.addEventListener('hashchange', open);
+})();

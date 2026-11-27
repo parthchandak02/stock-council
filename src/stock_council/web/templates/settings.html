@@ -124,6 +124,22 @@
       <span class="faint small">Switch off to pause a model without losing it. Cost is per stock.</span></div>
   {% endcall %}
 
+{% set fn = (run or {}).funnel or {} %}
+{% call fold('How it works', 'how', 'four steps, every evening', 'how') %}
+  <ol class="howsteps">
+    <li><b>Collect</b><span>{% if IS_US %}Closing price and volume for every US-listed company, plus SEC filings{% else %}Closing price, volume and delivery from NSE and BSE{% endif %}{% if fn.companies %} · {{ fn.companies|num }} companies{% endif %}</span></li>
+    <li><b>Screen</b><span>Runs <a href="{{ B }}/screener?{{ 'preset=' ~ evening.key[7:] if evening.key.startswith('preset:') else 's=' ~ evening.key[2:] }}" style="text-decoration:underline">{{ evening.name }}</a> from the Screener</span></li>
+    <li><b>Check</b><span>The top {{ st.schedule.max_stocks }} get one fact sheet from filings and one news search, the same for every AI</span></li>
+    <li><b>Vote</b><span>{{ st.models|length }} AIs answer the same questions; the votes are counted in code, not by an AI</span></li>
+  </ol>
+  <div class="howread">
+    {% for pat, chip, txt in [('bbbbbbb','buy','most say buy'), ('hhhhbhh','hold','most say wait'), ('sssshss','sell','most say avoid'), ('bbbhhss','split','no majority: read the reasons')] %}
+    <div class="readrow"><span class="votes">{% for c in pat %}<i class="{{ {'b':'buy','h':'hold','s':'sell'}[c] }}"></i>{% endfor %}</span><span class="chip {{ chip }}">{{ chip|title }}</span><span class="muted" style="font-size:14px">{{ txt }}</span></div>
+    {% endfor %}
+  </div>
+  <p class="faint small" style="margin:0;padding:0 16px 14px">Numbers come from filings, the same every time. Only the judgement comes from AI.</p>
+{% endcall %}
+
 <noscript><div class="savebar"><button class="btn">Save</button></div></noscript>
 </form>
 {% endblock %}

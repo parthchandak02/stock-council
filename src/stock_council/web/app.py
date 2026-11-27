@@ -504,15 +504,10 @@ def _quiet(fn, *args):
         pass  # stored on the run row and shown on its page
 
 
-@app.get("/how", response_class=HTMLResponse)
-def how(request: Request):
-    conn = db()
-    st = get_settings(conn)
-    run = _latest_screen(conn)
-    from ..universe import rule_label
-    ev = evening_screen(st)
-    return tpl.TemplateResponse(request, "how.html", {"st": st, "run": run, "nav": "how", "avg_stock": _avg_stock(),
-                                                      "evening": ev, "rule_texts": [rule_label(*r) for r in ev["rules"]]})
+@app.get("/how")
+def how():
+    """How it works now lives in Settings (one less tab); old links land on that section."""
+    return RedirectResponse(B + "/settings#how", status_code=303)
 
 
 @app.get("/history", response_class=HTMLResponse)
@@ -529,6 +524,8 @@ def history(request: Request):
         if run["kind"] == "on_demand":
             p = conn.execute("SELECT name, symbol, isin, verdict FROM picks WHERE run_id=?", (run["id"],)).fetchone()
             run["pick"] = dict(p) | {"verdict": json.loads(p["verdict"]) if p and p["verdict"] else {}} if p else None
+        if run["status"] == "failed" and run["kind"] == "on_demand" and not run["n"]:
+            continue    # a search that never found its company (before name search): nothing to look back at
         rows.append(run)
     return tpl.TemplateResponse(request, "history.html", {"runs": rows, "orders": _orders(limit=30), "nav": "history"})
 
@@ -557,7 +554,7 @@ def settings_page(request: Request, saved: str = "", sent: str = ""):
         "st": st, "catalogue": cat, "efforts": EFFORTS, "saved": saved, "sent": sent, "nav": "settings",
         "spend": spend, "key": openrouter_key(), "evening": evening_screen(st),
         "screen_choices": [("preset:" + p["id"], p["name"]) for p in PRESETS] + [("s:" + x["id"], x["name"]) for x in st.get("screens") or []],
-        "addr_status": status, "times": times,
+        "addr_status": status, "times": times, "run": _latest_screen(db()),
         "daynames": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]})
 
 

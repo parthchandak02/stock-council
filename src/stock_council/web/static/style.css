@@ -1,8 +1,8 @@
 /* Stock Council: the "Instrument" look. A few framed panels per page, shared-border grids,
-   every number shown against its limit. Light & dark, phone first. IBM Plex Sans + Mono. */
+   every number shown against its limit. Light & dark, phone first. Instrument Serif titles, Instrument Sans for everything else. */
 :root{
-  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --mono:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;   /* numbers: Inter with even-width digits (below) */
+  --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;   /* numbers: same face, even-width digits (below) */
   --brand:"Instrument Serif",Georgia,serif; --brand-hi:"Tiro Devanagari Hindi","Noto Serif Devanagari",serif;
   --bg:#f3f5f8; --surf:#ffffff; --raise:#f6f8fb; --ink:#15202e; --mute:#5f6b7a; --faint:#8a94a3; --line:#e2e7ee; --line2:#d3dae4;
   --buy:#15803d; --hold:#b45309; --sell:#c2410c; --split:#475569; --price:#c2611a; --focus:#3b63c9;
@@ -816,7 +816,8 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 .howread .readrow{gap:10px}
 .hrow .nm{overflow:hidden} .hrow .nm b{max-width:100%}
 
-/* Sabha: Inter everywhere, digits even-width so prices line up; the name in Instrument Serif + Tiro */
+/* Sabha type: Instrument Serif for the name, page titles and panel titles; Instrument Sans for everything else,
+   digits even-width so prices line up; Tiro for the Hindi name */
 body{font-variant-numeric:tabular-nums}
 .mono,.num-txt{letter-spacing:0}
 .brand{gap:8px}
@@ -824,3 +825,12 @@ body{font-variant-numeric:tabular-nums}
 .brand .word{font:400 25px/1 var(--brand);letter-spacing:.005em;color:var(--ink)}
 .brand .hi{font:400 19px/1 var(--brand-hi);color:var(--mute);margin-left:2px}
 @media (max-width:719px){.brand .word{display:inline} .brand .hi{display:none}}
+
+/* titles in the serif, like the name in the header */
+h1{font-family:var(--brand);font-weight:400;letter-spacing:0;font-size:30px;line-height:1.1}
+.hdr h1{font-size:32px}
+.tn-big{font-size:40px;line-height:1.05}
+.pick-h{font-size:24px}
+.ph h2,.ph h3{font-family:var(--brand);font-weight:400;font-size:20px;letter-spacing:0;line-height:1.2}
+.ph h2 .mono,.ph h3 .mono{font-family:var(--mono)}
+.md h1,.md h2{font-family:var(--sans);font-weight:600;letter-spacing:-.01em}

@@ -9,7 +9,7 @@ Read with `~/.claude/skills/design-principles/references/principles.md`. This fi
 
 ## Choices
 - Look: "Instrument" (approved 24 Nov 2026): few framed panels, shared-border grids, every number against its limit, 7-block votes and a vote ring. Mockup: cook/mockup/instrument-pages.html.
-- Fonts: IBM Plex Sans for words, IBM Plex Mono for numbers (Parth asked for a trading font). Overrides the "default font" ban.
+- Fonts: Instrument Serif for the name, page titles and panel titles; Instrument Sans for everything else, digits even-width (Parth chose option B, 27 Nov 2026: "more consistent" with the header). Tiro Devanagari for सभा.
 - Colours: dark navy first, light too; tokens in static/style.css. DII ownership is pink, not violet (violet ban).
 - Save model: autosave everywhere (Settings, Screener edits on the server for everyone; broker order drafts in the browser per stock) with a visible status.
 - Actions: filled = does something (Screen, Save, Check, Run now, Ask the council, Open in Gmail); outline = secondary or navigation.

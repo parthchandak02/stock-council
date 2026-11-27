@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% from "_ui.html" import icon, cost %}
-{% block title %}{{ 'How the list was found' if run.kind in ('daily', 'manual') else ('Asking the council' if run.status == 'running' else 'The council' ~ "'s calls") }} · Stock Council{% endblock %}
+{% block title %}{{ 'How the list was found' if run.kind in ('daily', 'manual') else ('Asking the council' if run.status == 'running' else 'The council' ~ "'s calls") }} · Sabha{% endblock %}
 {% block main %}
 <div id="live" {% if run.status == 'running' %}data-poll="1"{% endif %} style="display:flex;flex-direction:column;gap:inherit">
 <a class="back" href="{{ B }}/">{{ icon('back', 16) }}Today</a>

@@ -1,8 +1,9 @@
 /* Stock Council: the "Instrument" look. A few framed panels per page, shared-border grids,
    every number shown against its limit. Light & dark, phone first. IBM Plex Sans + Mono. */
 :root{
-  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;   /* numbers: Inter with even-width digits (below) */
+  --brand:"Instrument Serif",Georgia,serif; --brand-hi:"Tiro Devanagari Hindi","Noto Serif Devanagari",serif;
   --bg:#f3f5f8; --surf:#ffffff; --raise:#f6f8fb; --ink:#15202e; --mute:#5f6b7a; --faint:#8a94a3; --line:#e2e7ee; --line2:#d3dae4;
   --buy:#15803d; --hold:#b45309; --sell:#c2410c; --split:#475569; --price:#c2611a; --focus:#3b63c9;
   --on-accent:#ffffff;
@@ -814,3 +815,12 @@ a.tl-lab:hover span{text-decoration:underline;text-underline-offset:2px}
 .hrow .chev{color:var(--faint)}
 .howread .readrow{gap:10px}
 .hrow .nm{overflow:hidden} .hrow .nm b{max-width:100%}
+
+/* Sabha: Inter everywhere, digits even-width so prices line up; the name in Instrument Serif + Tiro */
+body{font-variant-numeric:tabular-nums}
+.mono,.num-txt{letter-spacing:0}
+.brand{gap:8px}
+.brand img{border-radius:7px}
+.brand .word{font:400 25px/1 var(--brand);letter-spacing:.005em;color:var(--ink)}
+.brand .hi{font:400 19px/1 var(--brand-hi);color:var(--mute);margin-left:2px}
+@media (max-width:719px){.brand .word{display:inline} .brand .hi{display:none}}

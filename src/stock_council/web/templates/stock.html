@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% from "_ui.html" import icon, verdict, dots, ring, gauge, agree, change, tone_of, cost, fold %}{% from "_charts.html" import pchart, fin %}
-{% block title %}{{ p.name|nice }} · Stock Council{% endblock %}
+{% block title %}{{ p.name|nice }} · Sabha{% endblock %}
 {% block main %}
 <div id="live" {% if p.status in ('news', 'council') %}data-poll="1"{% endif %} style="display:flex;flex-direction:column;gap:inherit">{% set s = p.sheet or {} %}{% set t = s.technicals or {} %}{% set v = p.verdict or {} %}{% set f = s.fundamentals or {} %}
 <a class="back" href="{{ B }}/">{{ icon('back', 16) }}Today</a>

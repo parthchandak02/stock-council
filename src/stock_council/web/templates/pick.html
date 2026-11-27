@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% from "_ui.html" import icon, flag %}
-{% block title %}Which company? · Stock Council{% endblock %}
+{% block title %}Which company? · Sabha{% endblock %}
 {% block main %}
 {% macro row(h, base, mk) -%}
 <form method="post" action="{{ base }}/check" class="pickrow"><input type="hidden" name="symbol" value="{{ h.symbol }}">

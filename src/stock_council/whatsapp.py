@@ -20,7 +20,7 @@ def build_message(run: dict, picks: list[dict], site: str = "") -> str:
     from .web.view import nice_name
     day = date.fromisoformat(run["day"]).strftime("%a %-d %b")
     fn = run.get("funnel") or {}
-    lines = [f"📈 *Stock Council* · {day}",
+    lines = [f"*Sabha* · {day}",
              (f"{len(picks)} stock{'s' if len(picks) != 1 else ''} from \"{fn['screen']}\" ({fn.get('matches', '?')} of {fn.get('companies') or 0:,} companies match)" if fn.get('screen') else f"{len(picks)} stock{'s' if len(picks) != 1 else ''} passed ({run.get('spikes') or fn.get('spikes') or '?'} volume spikes)"), ""]
     for p in picks:
         v = p.get("verdict") or {}

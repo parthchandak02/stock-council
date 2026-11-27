@@ -28,7 +28,7 @@ from .view import FILTER_LABELS, key_numbers, nice_name, short_fail, short_name,
 
 HERE = Path(__file__).parent
 STATIC = HERE / "static"
-app = FastAPI(title="Stock Council", docs_url=None, redoc_url=None)
+app = FastAPI(title="Sabha", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 from starlette.middleware.gzip import GZipMiddleware
@@ -188,10 +188,10 @@ ICON_FILES = {
     "icon-maskable-512.png": ("icon-maskable-512.png", "image/png"), "icon.svg": ("icon.svg", "image/svg+xml"),
 }
 MANIFEST = {
-    "name": "Stock Council", "short_name": "Council",
+    "name": "Sabha", "short_name": "Sabha",
     "description": "Daily volume-shock stock screen, judged by a council of AI analysts.",
     "start_url": "/", "scope": "/", "display": "standalone", "lang": "en",
-    "background_color": "#f6f4ef", "theme_color": "#13263f",
+    "background_color": "#0f1724", "theme_color": "#141e2d",
     "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
               {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
               {"src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],

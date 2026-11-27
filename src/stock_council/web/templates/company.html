@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% from "_ui.html" import icon, verdict, change, gauge %}{% from "_charts.html" import pchart %}
-{% block title %}{{ (c.name or c.nse_symbol)|nice }} · Stock Council{% endblock %}
+{% block title %}{{ (c.name or c.nse_symbol)|nice }} · Sabha{% endblock %}
 {% block main %}
 {% set sym = c.nse_symbol or c.bse_symbol %}
 {% macro tile(label, v, unit='', g=None) -%}
